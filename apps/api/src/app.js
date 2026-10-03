@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import { env } from './config/env.js'
+import authRoutes from './modules/auth/auth.routes.js'
 
 const app = express()
 app.use(cors({ origin: env.corsOrigin }))
@@ -8,7 +9,7 @@ app.use(express.json({ limit: '2mb' }))
 
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }))
 
-// ---- Módulos (se agregan en las siguientes subfases) ----
+app.use('/api/auth', authRoutes)
 
 app.use((req, res) => res.status(404).json({ error: 'Ruta no encontrada' }))
 
