@@ -1,0 +1,22 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --env-file=.env --watch src/server.js",
+    "start": "node --env-file=.env src/server.js",
+    "create-admin": "node --env-file=.env scripts/createAdmin.js",
+    "seed": "node --env-file=.env scripts/seed.js",
+    "check-db": "node --env-file=.env scripts/checkDb.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "firebase-admin": "^14.5.0"
+  }
+}
