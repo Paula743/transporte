@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@layer components {
+  .input {
+    @apply w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200;
+  }
+  .btn-primary {
+    @apply rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-secondary {
+    @apply rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-danger {
+    @apply rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .card {
+    @apply rounded-xl bg-white p-4 shadow;
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-gray-700;
+  }
+}
