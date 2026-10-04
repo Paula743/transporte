@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { register } from '../stores/auth'
 
 const router = useRouter()
-const form = ref({ name: '', email: '', password: '', role: 'PASSENGER' })
+const form = ref({ name: '', email: '', password: '' })
 const error = ref('')
 const loading = ref(false)
 
@@ -29,7 +29,7 @@ async function submit() {
 <template>
   <main class="flex min-h-screen items-center justify-center p-4">
     <form @submit.prevent="submit" class="card w-full max-w-sm space-y-4">
-      <h1 class="text-2xl font-bold text-emerald-700">Crear cuenta</h1>
+      <h1 class="text-2xl font-bold text-emerald-700">Crear cuenta de pasajero</h1>
       <div>
         <label class="label">Nombre completo</label>
         <input v-model="form.name" required class="input" />
@@ -41,13 +41,6 @@ async function submit() {
       <div>
         <label class="label">Contraseña</label>
         <input v-model="form.password" type="password" required class="input" />
-      </div>
-      <div>
-        <label class="label">Tipo de cuenta</label>
-        <select v-model="form.role" class="input">
-          <option value="PASSENGER">Pasajero</option>
-          <option value="DRIVER">Operador (chofer)</option>
-        </select>
       </div>
       <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
       <button class="btn-primary w-full" :disabled="loading">{{ loading ? 'Creando...' : 'Registrarme' }}</button>

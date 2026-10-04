@@ -6,6 +6,8 @@ import { auth } from '../stores/auth'
 import * as api from '../services/api'
 import { downloadTicket } from '../utils/ticket'
 import { fmtDateTime, money } from '../utils/format'
+import PointsBadge from '../components/PointsBadge.vue'
+import { refreshPoints } from '../stores/points'
 
 const tickets = ref([])
 const incidentTrip = ref(null)
@@ -29,6 +31,7 @@ async function cancel(tk) {
   error.value = ''
   try {
     await api.cancelTicket(tk.id)
+    refreshPoints()
     msg.value = 'Boleto cancelado.'
     await load()
   } catch (e) {
@@ -39,6 +42,7 @@ async function cancel(tk) {
 
 <template>
   <AppHeader title="Mis viajes">
+    <PointsBadge />
     <RouterLink to="/passenger" class="btn-secondary">Buscar viajes</RouterLink>
   </AppHeader>
 

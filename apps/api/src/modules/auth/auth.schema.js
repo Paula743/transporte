@@ -11,3 +11,6 @@ export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email('Correo inválido'),
   password: z.string().min(1, 'Escribe tu contraseña'),
 })
+
+// El registro público no recibe rol: solo crea pasajeros
+export const publicRegisterSchema = registerSchema.omit({ role: true })

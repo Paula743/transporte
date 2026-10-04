@@ -4,6 +4,8 @@ import AppHeader from '../components/AppHeader.vue'
 import { auth } from '../stores/auth'
 import * as api from '../services/api'
 import { ymd, fmtTime, money } from '../utils/format'
+import PointsBadge from '../components/PointsBadge.vue'
+import { points, refreshPoints } from '../stores/points'
 
 const cities = ref([])
 const form = ref({ origin: '', destination: '', date: ymd(new Date()) })
@@ -35,6 +37,7 @@ async function buy(t) {
   try {
     const n = qty.value[t.id]
     await api.buyTickets(auth.user.id, t.id, n)
+    refreshPoints()
     msg.value = `Compra exitosa: ${n} boleto(s) de ${t.route.origin} a ${t.route.destination}.`
     await runSearch()
   } catch (e) {
@@ -45,10 +48,15 @@ async function buy(t) {
 
 <template>
   <AppHeader title="Mi viaje">
+    <PointsBadge />
     <RouterLink to="/passenger/trips" class="btn-secondary">Mis viajes</RouterLink>
   </AppHeader>
 
   <main class="mx-auto max-w-6xl space-y-4 p-4">
+    <p class="text-sm text-gray-600">
+      Ganas <b>1 punto por cada $10</b> que pagas en tus boletos. Tus puntos actuales:
+      <b class="text-amber-700">{{ points.value ?? '—' }}</b>
+    </p>
     <section class="card grid gap-3 sm:grid-cols-4">
       <div>
         <label class="label">Ciudad de origen</label>

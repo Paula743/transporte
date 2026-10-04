@@ -36,10 +36,9 @@ export async function login(email, password) {
   return u ? wait(publicUser(u)) : fail('Correo o contraseña incorrectos')
 }
 
-export async function register({ name, email, password, role }) {
-  if (!['PASSENGER', 'DRIVER'].includes(role)) return fail('Rol no permitido')
+export async function register({ name, email, password }) {
   if (db.users.some((x) => x.email === email.trim().toLowerCase())) return fail('Ese correo ya está registrado')
-  const u = { id: `u${Date.now()}`, name, email: email.trim().toLowerCase(), password, role, ...(role === 'PASSENGER' ? { points: 0 } : { active: true }) }
+  const u = { id: `u${Date.now()}`, name, email: email.trim().toLowerCase(), password, role: 'PASSENGER', points: 0 }
   db.users.push(u)
   save()
   return wait(publicUser(u))
@@ -72,6 +71,10 @@ export async function buyTickets(userId, tripId, quantity) {
     })
     unit.availableSeats -= 1
   }
+  // Simulado
+  const route = db.routes.find((r) => r.id === trip.routeId)
+  const passenger = db.users.find((u) => u.id === userId)
+  passenger.points = (passenger.points || 0) + Math.floor((route.price * quantity) / 10)
   save()
   return wait({ ok: true })
 }
@@ -90,8 +93,17 @@ export async function cancelTicket(ticketId) {
   const trip = db.trips.find((t) => t.id === tk.tripId)
   tk.status = 'CANCELADO'
   db.units.find((u) => u.id === trip.unitId).availableSeats += 1
+  // Simulado
+  const route = db.routes.find((r) => r.id === trip.routeId)
+  const passenger = db.users.find((u) => u.id === tk.passengerId)
+  passenger.points = Math.max(0, (passenger.points || 0) - Math.floor(route.price / 10))
   save()
   return wait({ ok: true })
+}
+
+export async function getMyPoints(userId) {
+  const u = db.users.find((x) => x.id === userId)
+  return wait(u?.points ?? 0)
 }
 
 // ---------- Incidencias (pasajero y chofer) ----------
@@ -126,7 +138,6 @@ export const addMonths = (date, n) => {
   return x
 }
 
-// El periodo es [inicio, inicio + 1 mes). Solo se permite si el mes ya terminó.
 export const maxStartDate = () => ymd(addMonths(new Date(), -1))
 
 const countBy = (arr, keyFn) => {
@@ -176,6 +187,9 @@ export async function adminReport(startDate) {
     routesCommon, routesIncidents, unitsUsed, clients, drivers, months,
   })
 }
+
+// export const adminIncidents = (startDate) => request(`/incidents?start=${startDate}`) // API REAL
+// export const getIncident = (id) => request(`/incidents/${id}`) // API REAL
 
 export async function adminIncidents(startDate) {
   if (!startDate || startDate > maxStartDate()) return fail('El mes seleccionado aún no se completa')
