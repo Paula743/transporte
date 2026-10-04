@@ -1,6 +1,6 @@
 import { seed, cities } from './mockData.js'
 import { ymd } from '../utils/format.js'
-import { hasStarted } from '../utils/trips.js'
+import { hasStarted } from '../utils/trip.js'
 
 const DB_KEY = 'mock_db_v1'
 const HOUR = 3600 * 1000

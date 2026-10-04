@@ -8,7 +8,7 @@ import { downloadTicket } from '../utils/ticket.js'
 import { fmtDateTime, money } from '../utils/format.js'
 import PointsBadge from '../components/PointsBadge.vue'
 import { refreshPoints } from '../stores/points.js'
-import { hasStarted, canReportIncident, incidentHint, useNow } from '../utils/trips.js'
+import { hasStarted, canReportIncident, incidentHint, useNow } from '../utils/trip.js'
 
 const now = useNow()
 const tickets = ref([])

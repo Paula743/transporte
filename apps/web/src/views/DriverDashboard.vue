@@ -5,7 +5,7 @@ import IncidentModal from '../components/IncidentModal.vue'
 import { auth } from '../stores/auth.js'
 import * as api from '../services/api.js'
 import { fmtDateTime } from '../utils/format.js'
-import { canReportIncident, incidentHint, useNow, canFinishTrip, finishHint } from '../utils/trips.js'
+import { canReportIncident, incidentHint, canFinishTrip, finishHint, tripPhase, phaseLabel, phaseClass, useNow } from '../utils/trip.js'
 
 const now = useNow()
 const trips = ref([])
@@ -52,9 +52,9 @@ async function finish(t) {
         <p class="text-sm text-gray-500">Unidad {{ t.unit.plate }}</p>
         <span
           class="mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium"
-          :class="finished(t) ? 'bg-gray-200 text-gray-600' : 'bg-emerald-100 text-emerald-700'"
+          :class="phaseClass[tripPhase(t, now)]"
         >
-          {{ t.status }}
+          {{ phaseLabel[tripPhase(t, now)] }}
         </span>
       </div>
       <div class="flex flex-wrap gap-2">

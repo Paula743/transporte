@@ -29,3 +29,21 @@ export const finishHint = (trip, now = Date.now()) => {
   if (trip.status === 'FINALIZADO') return 'El viaje ya finalizó'
   return ''
 }
+
+// Fase que se muestra al usuario: un viaje próximo cuya hora de salida ya pasó está EN CURSO
+export const tripPhase = (trip, now = Date.now()) =>
+  trip.status === 'PROXIMO' && hasStarted(trip, now) ? 'EN_CURSO' : trip.status
+
+export const phaseLabel = {
+  PROXIMO: 'PRÓXIMO',
+  EN_CURSO: 'EN CURSO',
+  FINALIZADO: 'FINALIZADO',
+  CANCELADO: 'CANCELADO',
+}
+
+export const phaseClass = {
+  PROXIMO: 'bg-emerald-100 text-emerald-700',
+  EN_CURSO: 'bg-blue-100 text-blue-700',
+  FINALIZADO: 'bg-gray-200 text-gray-600',
+  CANCELADO: 'bg-red-100 text-red-700',
+}
