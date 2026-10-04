@@ -2,6 +2,10 @@ import express from 'express'
 import cors from 'cors'
 import { env } from './config/env.js'
 import authRoutes from './modules/auth/auth.routes.js'
+import unitsRoutes from './modules/units/unit.routes.js'
+import routesRoutes from './modules/routes/route.routes.js'
+import passengersRoutes from './modules/passengers/passenger.routes.js'
+import driversRoutes from './modules/drivers/driver.routes.js'
 
 const app = express()
 app.use(cors({ origin: env.corsOrigin }))
@@ -10,6 +14,10 @@ app.use(express.json({ limit: '2mb' }))
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }))
 
 app.use('/api/auth', authRoutes)
+app.use('/api/units', unitsRoutes)
+app.use('/api/routes', routesRoutes)
+app.use('/api/passengers', passengersRoutes)
+app.use('/api/drivers', driversRoutes)
 
 app.use((req, res) => res.status(404).json({ error: 'Ruta no encontrada' }))
 
