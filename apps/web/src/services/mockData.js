@@ -33,7 +33,7 @@ export function seed() {
 
   const trips = [
     { id: 'V1', routeId: 'R1', unitId: 'U1', driverId: 'u3', departure: d(1, 9), arrival: d(1, 10, 30), status: 'PROXIMO' },
-    { id: 'V2', routeId: 'R1', unitId: 'U2', driverId: 'u3', departure: d(0, 11, 20), arrival: d(0, 12, 30), status: 'PROXIMO' },
+    { id: 'V2', routeId: 'R1', unitId: 'U2', driverId: 'u3', departure: d(0, 15, 20), arrival: d(0, 16, 30), status: 'PROXIMO' },
     { id: 'V3', routeId: 'R3', unitId: 'U3', driverId: 'u3', departure: d(2, 12), arrival: d(2, 13), status: 'PROXIMO' },
     { id: 'V4', routeId: 'R5', unitId: 'U2', driverId: 'u4', departure: d(3, 7), arrival: d(3, 8, 15), status: 'PROXIMO' },
   ]

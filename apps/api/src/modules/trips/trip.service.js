@@ -1,7 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { db } from '../../config/firebase.js'
 import { HttpError, notFound } from '../../shared/httpError.js'
-import { effectiveTripStatus } from '../../shared/tripStatus.js'
+import { effectiveTripStatus, hasStarted } from '../../shared/tripStatus.js'
 import { tripsRepository, findByDriver, findByRouteIds } from './trip.repository.js'
 import { routesRepository } from '../routes/route.repository.js'
 import { unitsRepository } from '../units/unit.repository.js'
@@ -79,6 +79,9 @@ async function closeTrip(tripId, { driverId } = {}) {
     if (driverId && trip.driverId !== driverId) throw new HttpError(403, 'Este viaje no está asignado a ti')
     if (trip.status !== 'PROXIMO' || (driverId && effectiveTripStatus(trip) === 'FINALIZADO')) {
       throw new HttpError(409, 'El viaje ya está finalizado')
+    }
+    if (driverId && !hasStarted(trip)) {
+      throw new HttpError(409, 'El viaje aún no inicia; podrás finalizarlo cuando comience')
     }
 
     const unitRef = unitsRepository.col.doc(trip.unitId)

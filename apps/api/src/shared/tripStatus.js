@@ -10,3 +10,5 @@ export function effectiveTicketStatus(ticket, trip) {
   if (ticket.status === 'CANCELADO') return 'CANCELADO'
   return effectiveTripStatus(trip) === 'FINALIZADO' ? 'VENCIDO' : 'VALIDO'
 }
+
+export const hasStarted = (trip, now = Date.now()) => now >= new Date(trip.departure).getTime() // API REAL

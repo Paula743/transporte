@@ -1,11 +1,11 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import AppHeader from '../components/AppHeader.vue'
-import { auth } from '../stores/auth'
-import * as api from '../services/api'
-import { ymd, fmtTime, money } from '../utils/format'
+import { auth } from '../stores/auth.js'
+import * as api from '../services/api.js'
+import { ymd, fmtTime, money } from '../utils/format.js'
 import PointsBadge from '../components/PointsBadge.vue'
-import { points, refreshPoints } from '../stores/points'
+import { points, refreshPoints } from '../stores/points.js'
 
 const cities = ref([])
 const form = ref({ origin: '', destination: '', date: ymd(new Date()) })
@@ -89,7 +89,8 @@ async function buy(t) {
 
       <article v-for="t in results" :key="t.id" class="card flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p class="text-lg font-semibold">{{ fmtTime(t.departure) }} → {{ fmtTime(t.arrival) }}</p>
+          <!-- <p class="text-lg font-semibold">{{ fmtTime(t.departure) }} → {{ fmtTime(t.arrival) }}</p> -->
+          <p class="text-lg font-semibold">{{ fmtTime(t.departure) }}</p>
           <p class="text-sm text-gray-500">{{ t.route.origin }} → {{ t.route.destination }} · {{ t.route.km }} km</p>
           <p class="text-sm text-gray-500">{{ t.unit.availableSeats }} asientos disponibles</p>
         </div>

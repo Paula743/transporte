@@ -3,7 +3,7 @@ import QRCode from 'qrcode'
 import { FieldValue } from 'firebase-admin/firestore'
 import { db } from '../../config/firebase.js'
 import { HttpError, notFound } from '../../shared/httpError.js'
-import { effectiveTripStatus, effectiveTicketStatus } from '../../shared/tripStatus.js'
+import { effectiveTripStatus, effectiveTicketStatus, hasStarted } from '../../shared/tripStatus.js'
 import { ticketsRepository, findByPassenger } from './ticket.repository.js'
 import { tripsRepository } from '../trips/trip.repository.js'
 import { withRelations } from '../trips/trip.service.js'
@@ -20,9 +20,8 @@ export async function buy(user, { tripId, quantity }) {
     const tripSnap = await tx.get(tripRef)
     if (!tripSnap.exists) throw notFound('Viaje')
     const trip = tripSnap.data()
-    if (effectiveTripStatus(trip) !== 'PROXIMO' || new Date(trip.departure) <= new Date()) {
-      throw new HttpError(409, 'Este viaje ya no está disponible')
-    }
+    if (hasStarted(trip)) throw new HttpError(409, 'El viaje ya inició; ya no es posible comprar boletos')
+    if (effectiveTripStatus(trip) !== 'PROXIMO') throw new HttpError(409, 'Este viaje ya no está disponible')
 
     const unitRef = unitsRepository.col.doc(trip.unitId)
     const routeRef = routesRepository.col.doc(trip.routeId)
@@ -89,6 +88,7 @@ export async function cancel(user, ticketId) {
 
     const tripSnap = await tx.get(tripsRepository.col.doc(ticket.tripId))
     const trip = tripSnap.data()
+    if (hasStarted(trip)) throw new HttpError(409, 'El viaje ya inició; ya no es posible cancelar el boleto')
     if (effectiveTicketStatus(ticket, trip) !== 'VALIDO') {
       throw new HttpError(409, 'Este boleto ya no se puede cancelar')
     }

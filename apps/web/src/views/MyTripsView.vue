@@ -2,22 +2,27 @@
 import { ref, onMounted, computed } from 'vue'
 import AppHeader from '../components/AppHeader.vue'
 import IncidentModal from '../components/IncidentModal.vue'
-import { auth } from '../stores/auth'
-import * as api from '../services/api'
-import { downloadTicket } from '../utils/ticket'
-import { fmtDateTime, money } from '../utils/format'
+import { auth } from '../stores/auth.js'
+import * as api from '../services/api.js'
+import { downloadTicket } from '../utils/ticket.js'
+import { fmtDateTime, money } from '../utils/format.js'
 import PointsBadge from '../components/PointsBadge.vue'
-import { refreshPoints } from '../stores/points'
+import { refreshPoints } from '../stores/points.js'
+import { hasStarted, canReportIncident, incidentHint, useNow } from '../utils/trips.js'
 
+const now = useNow()
 const tickets = ref([])
 const incidentTrip = ref(null)
 const msg = ref('')
 const error = ref('')
 
-const load = async () => (tickets.value = await api.myTickets(auth.user.id))
+const load = async () => {
+  const list = await api.myTickets(auth.user.id)
+  // Más reciente primero (por fecha y hora de salida del viaje)
+  tickets.value = list.sort((a, b) => new Date(b.trip.departure) - new Date(a.trip.departure))
+}
 onMounted(load)
 
-const tripFinished = (tk) => tk.trip.status === 'FINALIZADO'
 const isActive = (tk) => tk.status === 'VALIDO'
 
 const badge = computed(() => ({
@@ -61,13 +66,20 @@ async function cancel(tk) {
 
       <div class="flex flex-wrap gap-2">
         <template v-if="isActive(tk)">
-          <button class="btn-danger" @click="cancel(tk)">Cancelar viaje</button>
+          <button
+            class="btn-danger"
+            :disabled="hasStarted(tk.trip, now)"
+            :title="hasStarted(tk.trip, now) ? 'El viaje ya inició; no se puede cancelar' : ''"
+            @click="cancel(tk)"
+          >
+            Cancelar viaje
+          </button>
           <button class="btn-secondary" @click="downloadTicket(tk)">Descargar boleto</button>
         </template>
         <button
           class="btn-secondary"
-          :disabled="tripFinished(tk) || tk.status === 'CANCELADO'"
-          :title="tripFinished(tk) ? 'El viaje ya finalizó' : ''"
+          :disabled="!canReportIncident(tk.trip, now) || tk.status === 'CANCELADO'"
+          :title="incidentHint(tk.trip, now)"
           @click="incidentTrip = tk.trip.id"
         >
           Reportar incidencia

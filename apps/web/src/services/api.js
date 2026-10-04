@@ -1,5 +1,6 @@
-import { seed, cities } from './mockData'
-import { ymd } from '../utils/format'
+import { seed, cities } from './mockData.js'
+import { ymd } from '../utils/format.js'
+import { hasStarted } from '../utils/trips.js'
 
 const DB_KEY = 'mock_db_v1'
 const HOUR = 3600 * 1000
@@ -70,6 +71,7 @@ export async function buyTickets(userId, tripId, quantity) {
       status: 'VALIDO', createdAt: new Date().toISOString(),
     })
     unit.availableSeats -= 1
+    if (hasStarted(trip)) return fail('El viaje ya inició; ya no es posible comprar boletos')
   }
   // Simulado
   const route = db.routes.find((r) => r.id === trip.routeId)
@@ -89,9 +91,8 @@ export async function myTickets(userId) {
 
 export async function cancelTicket(ticketId) {
   const tk = db.tickets.find((x) => x.id === ticketId)
-  if (!tk || ticketStatus(tk) !== 'VALIDO') return fail('Este boleto ya no se puede cancelar')
+  if (!tk || ticketStatus(tk) !== 'VALIDO' || hasStarted(trip)) return fail('Este boleto ya no se puede cancelar')
   const trip = db.trips.find((t) => t.id === tk.tripId)
-  tk.status = 'CANCELADO'
   db.units.find((u) => u.id === trip.unitId).availableSeats += 1
   // Simulado
   const route = db.routes.find((r) => r.id === trip.routeId)
@@ -109,6 +110,8 @@ export async function getMyPoints(userId) {
 // ---------- Incidencias (pasajero y chofer) ----------
 export async function reportIncident({ tripId, emitterId, emitterRole, title, description, photo }) {
   const trip = db.trips.find((t) => t.id === tripId)
+  if (!trip) return fail('Viaje no encontrado')
+  if (!hasStarted(trip)) return fail('El viaje aún no inicia; podrás reportar incidencias cuando comience')
   if (!trip || tripStatus(trip) === 'FINALIZADO') return fail('El viaje ya finalizó')
   db.incidents.push({ id: `I${Date.now()}`, tripId, emitterId, emitterRole, title, description, photo, createdAt: new Date().toISOString() })
   save()
@@ -125,6 +128,7 @@ export async function driverTrips(userId) {
 export async function finishTrip(tripId) {
   const trip = db.trips.find((t) => t.id === tripId)
   if (!trip || tripStatus(trip) === 'FINALIZADO') return fail('El viaje ya está finalizado')
+  if (!hasStarted(trip)) return fail('El viaje aún no inicia; podrás finalizarlo cuando comience')
   trip.status = 'FINALIZADO'
   db.units.find((u) => u.id === trip.unitId).availableSeats = db.units.find((u) => u.id === trip.unitId).totalSeats
   save()

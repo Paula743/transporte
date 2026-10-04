@@ -1,5 +1,5 @@
 import { HttpError, notFound } from '../../shared/httpError.js'
-import { effectiveTripStatus } from '../../shared/tripStatus.js'
+import { effectiveTripStatus, hasStarted } from '../../shared/tripStatus.js'
 import { monthPeriod } from '../../shared/period.js'
 import { incidentsRepository } from './incident.repository.js'
 import { tripsRepository } from '../trips/trip.repository.js'
@@ -11,6 +11,7 @@ import { findByTrip } from '../tickets/ticket.repository.js'
 export async function createIncident(user, { tripId, title, description, photo }) {
   const trip = await tripsRepository.findById(tripId)
   if (!trip) throw notFound('Viaje')
+  if (!hasStarted(trip)) throw new HttpError(409, 'El viaje aún no inicia; podrás reportar incidencias cuando comience')
   if (effectiveTripStatus(trip) === 'FINALIZADO') throw new HttpError(409, 'El viaje ya finalizó')
 
   if (user.role === 'DRIVER' && trip.driverId !== user.id) {

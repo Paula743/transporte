@@ -2,10 +2,12 @@
 import { ref, onMounted } from 'vue'
 import AppHeader from '../components/AppHeader.vue'
 import IncidentModal from '../components/IncidentModal.vue'
-import { auth } from '../stores/auth'
-import * as api from '../services/api'
-import { fmtDateTime } from '../utils/format'
+import { auth } from '../stores/auth.js'
+import * as api from '../services/api.js'
+import { fmtDateTime } from '../utils/format.js'
+import { canReportIncident, incidentHint, useNow, canFinishTrip, finishHint } from '../utils/trips.js'
 
+const now = useNow()
 const trips = ref([])
 const incidentTrip = ref(null)
 const msg = ref('')
@@ -46,7 +48,7 @@ async function finish(t) {
       <div>
         <p class="font-semibold">{{ t.route.origin }} → {{ t.route.destination }}</p>
         <p class="text-sm text-gray-500">Salida: {{ fmtDateTime(t.departure) }}</p>
-        <p class="text-sm text-gray-500">Llegada: {{ fmtDateTime(t.arrival) }}</p>
+        <!-- <p class="text-sm text-gray-500">Llegada: {{ fmtDateTime(t.arrival) }}</p> -->
         <p class="text-sm text-gray-500">Unidad {{ t.unit.plate }}</p>
         <span
           class="mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium"
@@ -56,8 +58,22 @@ async function finish(t) {
         </span>
       </div>
       <div class="flex flex-wrap gap-2">
-        <button class="btn-primary" :disabled="finished(t)" @click="finish(t)">Finalizar viaje</button>
-        <button class="btn-secondary" :disabled="finished(t)" @click="incidentTrip = t.id">Reportar incidencia</button>
+        <button
+          class="btn-primary"
+          :disabled="!canFinishTrip(t, now)"
+          :title="finishHint(t, now)"
+          @click="finish(t)"
+        >
+          Finalizar viaje
+        </button>
+        <button
+          class="btn-secondary"
+          :disabled="!canReportIncident(t, now)"
+          :title="incidentHint(t, now)"
+          @click="incidentTrip = t.id"
+        >
+          Reportar incidencia
+        </button>
       </div>
     </article>
   </main>
