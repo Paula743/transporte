@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import AppHeader from '../components/AppHeader.vue'
 import * as api from '../services/api'
 import { downloadReport } from '../utils/report'
+import { fmtDateTime } from '../utils/format'
 
 const start = ref('')
 const report = ref(null)
@@ -12,18 +13,34 @@ const max = api.maxStartDate()
 
 const invalid = computed(() => start.value && start.value > max)
 
+const incidents = ref([])
+const detail = ref(null)
+
+const roleLabel = (r) => (r === 'DRIVER' ? 'Operador' : 'Pasajero')
+
 async function load() {
   error.value = ''
   report.value = null
+  incidents.value = []
   if (!start.value) return (error.value = 'Selecciona una fecha de inicio')
   if (invalid.value) return (error.value = 'El mes seleccionado aún no se completa. Elige una fecha anterior.')
   loading.value = true
   try {
-    report.value = await api.adminReport(start.value)
+    const [r, inc] = await Promise.all([api.adminReport(start.value), api.adminIncidents(start.value)])
+    report.value = r
+    incidents.value = inc
   } catch (e) {
     error.value = e.message
   } finally {
     loading.value = false
+  }
+}
+
+async function openDetail(i) {
+  try {
+    detail.value = await api.getIncident(i.id)
+  } catch (e) {
+    error.value = e.message
   }
 }
 
@@ -93,6 +110,53 @@ const lists = computed(() =>
           </div>
         </div>
       </section>
+      <section class="card">
+        <div class="mb-3 flex items-center justify-between">
+          <h3 class="font-semibold">Incidencias del mes <span class="font-normal text-gray-500">({{ incidents.length }})</span></h3>
+        </div>
+        <p v-if="!incidents.length" class="text-sm text-gray-500">No hay incidencias reportadas en este periodo.</p>
+        <div v-else class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="border-b text-xs uppercase text-gray-500">
+              <tr>
+                <th class="py-2 pr-3">Fecha</th>
+                <th class="py-2 pr-3">Ruta</th>
+                <th class="py-2 pr-3">Reportó</th>
+                <th class="py-2 pr-3">Título</th>
+                <th class="py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="i in incidents" :key="i.id" class="border-b last:border-0">
+                <td class="whitespace-nowrap py-2 pr-3">{{ fmtDateTime(i.createdAt) }}</td>
+                <td class="whitespace-nowrap py-2 pr-3">{{ i.route }}</td>
+                <td class="py-2 pr-3">
+                  {{ i.emitterName }}
+                  <span
+                    class="ml-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                    :class="i.emitterRole === 'DRIVER' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'"
+                  >{{ roleLabel(i.emitterRole) }}</span>
+                </td>
+                <td class="py-2 pr-3">{{ i.title }}<span v-if="i.hasPhoto" class="ml-1 text-gray-400" title="Incluye foto">📷</span></td>
+                <td class="py-2 text-right"><button class="btn-secondary" @click="openDetail(i)">Ver detalle</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </template>
+    <div v-if="detail" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="detail = null">
+      <div class="card w-full max-w-lg space-y-3">
+        <h2 class="text-lg font-bold">{{ detail.title }}</h2>
+        <p class="text-sm text-gray-500">
+          {{ detail.emitterName }} · {{ roleLabel(detail.emitterRole) }} · {{ fmtDateTime(detail.createdAt) }}
+        </p>
+        <p class="whitespace-pre-line text-sm">{{ detail.description }}</p>
+        <img v-if="detail.photo" :src="detail.photo" class="max-h-72 rounded" alt="Foto de la incidencia" />
+        <div class="flex justify-end">
+          <button class="btn-primary" @click="detail = null">Cerrar</button>
+        </div>
+      </div>
+    </div>
   </main>
 </template>

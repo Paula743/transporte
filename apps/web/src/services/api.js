@@ -176,3 +176,32 @@ export async function adminReport(startDate) {
     routesCommon, routesIncidents, unitsUsed, clients, drivers, months,
   })
 }
+
+export async function adminIncidents(startDate) {
+  if (!startDate || startDate > maxStartDate()) return fail('El mes seleccionado aún no se completa')
+  const start = new Date(`${startDate}T00:00:00`)
+  const end = addMonths(start, 1)
+
+  const list = db.incidents
+    .map((i) => {
+      const trip = db.trips.find((t) => t.id === i.tripId)
+      const route = db.routes.find((r) => r.id === trip.routeId)
+      const emitter = db.users.find((u) => u.id === i.emitterId)
+      return {
+        id: i.id, tripId: i.tripId, title: i.title, description: i.description,
+        hasPhoto: !!i.photo, createdAt: i.createdAt,
+        emitterName: emitter?.name ?? '—', emitterRole: i.emitterRole,
+        route: `${route.origin} → ${route.destination}`, departure: trip.departure,
+      }
+    })
+    .filter((i) => new Date(i.departure) >= start && new Date(i.departure) < end)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+  return wait(list)
+}
+
+export async function getIncident(id) {
+  const i = db.incidents.find((x) => x.id === id)
+  if (!i) return fail('Incidencia no encontrada')
+  const emitter = db.users.find((u) => u.id === i.emitterId)
+  return wait({ ...i, emitterName: emitter?.name ?? '—' })
+}

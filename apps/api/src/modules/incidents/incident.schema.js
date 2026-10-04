@@ -6,3 +6,7 @@ export const incidentCreateSchema = z.object({
   description: z.string().trim().min(3).max(1000),
   photo: z.string().startsWith('data:image/').max(900_000, 'La foto es demasiado grande').nullable().optional(),
 })
+
+export const listQuerySchema = z.object({
+  start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Usa el formato AAAA-MM-DD'),
+})

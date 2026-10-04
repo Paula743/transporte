@@ -1,4 +1,5 @@
 import * as service from './incident.service.js'
 
 export const create = async (req, res) => res.status(201).json(await service.createIncident(req.user, req.valid.body))
-export const list = async (req, res) => res.json(await service.listIncidents())
+export const list = async (req, res) => res.json(await service.listIncidents(req.valid.query.start))
+export const get = async (req, res) => res.json(await service.getIncident(req.params.id))

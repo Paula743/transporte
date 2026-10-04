@@ -1,8 +1,12 @@
 import { HttpError, notFound } from '../../shared/httpError.js'
 import { effectiveTripStatus } from '../../shared/tripStatus.js'
+import { monthPeriod } from '../../shared/period.js'
 import { incidentsRepository } from './incident.repository.js'
 import { tripsRepository } from '../trips/trip.repository.js'
+import { routesRepository } from '../routes/route.repository.js'
 import { findByTrip } from '../tickets/ticket.repository.js'
+
+
 
 export async function createIncident(user, { tripId, title, description, photo }) {
   const trip = await tripsRepository.findById(tripId)
@@ -30,7 +34,40 @@ export async function createIncident(user, { tripId, title, description, photo }
   })
 }
 
-export async function listIncidents() {
-  const all = await incidentsRepository.findAll()
-  return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+// Incidencias de los viajes que salieron en el mes (sin la foto, que es pesada)
+export async function listIncidents(startStr) {
+  const { start, end } = monthPeriod(startStr)
+  const [incidents, trips, routes] = await Promise.all([
+    incidentsRepository.findAll(),
+    tripsRepository.findAll(),
+    routesRepository.findAll(),
+  ])
+  const T = Object.fromEntries(trips.map((t) => [t.id, t]))
+  const R = Object.fromEntries(routes.map((r) => [r.id, r]))
+
+  return incidents
+    .filter((i) => {
+      const trip = T[i.tripId]
+      if (!trip) return false
+      const dep = new Date(trip.departure)
+      return dep >= start && dep < end
+    })
+    .map(({ photo, ...i }) => {
+      const trip = T[i.tripId]
+      const route = R[trip.routeId]
+      return {
+        ...i,
+        hasPhoto: !!photo,
+        route: route ? `${route.origin} → ${route.destination}` : 'Ruta eliminada',
+        departure: trip.departure,
+      }
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+// Detalle de una incidencia, con la foto
+export async function getIncident(id) {
+  const incident = await incidentsRepository.findById(id)
+  if (!incident) throw notFound('Incidencia')
+  return incident
 }
