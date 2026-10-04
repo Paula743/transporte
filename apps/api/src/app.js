@@ -9,6 +9,7 @@ import driversRoutes from './modules/drivers/driver.routes.js'
 import tripsRoutes from './modules/trips/trip.routes.js'
 import ticketsRoutes from './modules/tickets/ticket.routes.js'
 import incidentsRoutes from './modules/incidents/incident.routes.js'
+import reportsRoutes from './modules/reports/report.routes.js'
 
 const app = express()
 app.use(cors({ origin: env.corsOrigin }))
@@ -16,6 +17,7 @@ app.use(express.json({ limit: '2mb' }))
 
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }))
 
+// Módulos
 app.use('/api/auth', authRoutes)
 app.use('/api/units', unitsRoutes)
 app.use('/api/routes', routesRoutes)
@@ -24,6 +26,7 @@ app.use('/api/drivers', driversRoutes)
 app.use('/api/trips', tripsRoutes)
 app.use('/api/tickets', ticketsRoutes)
 app.use('/api/incidents', incidentsRoutes)
+app.use('/api/reports', reportsRoutes)
 
 app.use((req, res) => res.status(404).json({ error: 'Ruta no encontrada' }))
 
