@@ -11,7 +11,11 @@ const incidentTrip = ref(null)
 const msg = ref('')
 const error = ref('')
 
-const load = async () => (trips.value = await api.driverTrips(auth.user.id))
+const load = async () => {
+  const list = await api.driverTrips(auth.user.id)
+  // Más reciente primero (por fecha y hora de salida)
+  trips.value = list.sort((a, b) => new Date(b.departure) - new Date(a.departure))
+}
 onMounted(load)
 
 const finished = (t) => t.status === 'FINALIZADO'

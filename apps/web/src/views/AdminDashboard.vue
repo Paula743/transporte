@@ -83,8 +83,16 @@ const lists = computed(() =>
             </li>
           </ol>
         </div>
+
+        <div class="card">
+          <h3 class="mb-2 font-semibold">Servicios por mes (temporadas altas y bajas)</h3>
+          <div v-for="m in report.months" :key="m.month" class="mb-1 flex items-center gap-2 text-sm">
+            <span class="w-20 shrink-0">{{ m.month }}</span>
+            <div class="h-4 rounded bg-emerald-500" :style="{ width: (m.total / maxMonth) * 100 + '%', minWidth: '2px' }"></div>
+            <span>{{ m.total }}</span>
+          </div>
+        </div>
       </section>
     </template>
   </main>
 </template>
-

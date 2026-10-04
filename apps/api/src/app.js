@@ -8,6 +8,7 @@ import passengersRoutes from './modules/passengers/passenger.routes.js'
 import driversRoutes from './modules/drivers/driver.routes.js'
 import tripsRoutes from './modules/trips/trip.routes.js'
 import ticketsRoutes from './modules/tickets/ticket.routes.js'
+import incidentsRoutes from './modules/incidents/incident.routes.js'
 
 const app = express()
 app.use(cors({ origin: env.corsOrigin }))
@@ -22,6 +23,7 @@ app.use('/api/passengers', passengersRoutes)
 app.use('/api/drivers', driversRoutes)
 app.use('/api/trips', tripsRoutes)
 app.use('/api/tickets', ticketsRoutes)
+app.use('/api/incidents', incidentsRoutes)
 
 app.use((req, res) => res.status(404).json({ error: 'Ruta no encontrada' }))
 
