@@ -92,7 +92,7 @@ async function buy(t) {
           <!-- <p class="text-lg font-semibold">{{ fmtTime(t.departure) }} → {{ fmtTime(t.arrival) }}</p> -->
           <p class="text-lg font-semibold">{{ fmtTime(t.departure) }}</p>
           <p class="text-sm text-gray-500">{{ t.route.origin }} → {{ t.route.destination }} · {{ t.route.km }} km</p>
-          <p class="text-sm text-gray-500">{{ t.unit.availableSeats }} asientos disponibles</p>
+          <p class="text-sm text-gray-500">{{ t.unit.availableSeats }} </p>
         </div>
         <div class="text-right">
           <p class="text-xl font-bold text-emerald-700">{{ money(t.route.price) }}</p>

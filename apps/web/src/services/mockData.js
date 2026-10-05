@@ -36,12 +36,13 @@ export function seed() {
     { id: 'V2', routeId: 'R1', unitId: 'U2', driverId: 'u3', departure: d(0, 15, 20), arrival: d(0, 16, 30), status: 'PROXIMO' },
     { id: 'V3', routeId: 'R3', unitId: 'U3', driverId: 'u3', departure: d(2, 12), arrival: d(2, 13), status: 'PROXIMO' },
     { id: 'V4', routeId: 'R5', unitId: 'U2', driverId: 'u4', departure: d(3, 7), arrival: d(3, 8, 15), status: 'PROXIMO' },
+    { id: 'V5', routeId: 'R1', unitId: 'U1', driverId: 'u3', departure: d(0, 23), arrival: d(0, 24, 30), status: 'PROXIMO' },
   ]
 
   const tickets = [
     { id: 'T1', tripId: 'V1', passengerId: 'u2', seat: 1, platform: 3, status: 'VALIDO', createdAt: d(0, 8) },
     { id: 'T2', tripId: 'V2', passengerId: 'u2', seat: 1, platform: 10, status: 'VALIDO', createdAt: d(0, 8) },
-    { id: 'T3', tripId: 'V4', passengerId: 'u2', seat: 1, platform: 4, status: 'VALIDO', createdAt: d(0, 8) },
+    { id: 'T3', tripId: 'V5', passengerId: 'u2', seat: 1, platform: 4, status: 'VALIDO', createdAt: d(0, 8) },
   ]
   const incidents = []
 
