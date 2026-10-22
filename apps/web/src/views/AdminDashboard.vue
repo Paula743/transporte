@@ -2,7 +2,6 @@
 import { ref, computed } from 'vue'
 import AppHeader from '../components/AppHeader.vue'
 import * as api from '../services/api'
-import { downloadReport } from '../utils/report'
 import { fmtDateTime } from '../utils/format'
 
 const start = ref('')
@@ -57,6 +56,16 @@ const lists = computed(() =>
       ]
     : [],
 )
+
+async function download() {
+  error.value = ''
+  try {
+    await api.downloadMonthlyXlsx(start.value)
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
 </script>
 
 <template>
@@ -69,7 +78,7 @@ const lists = computed(() =>
         <input v-model="start" type="date" :max="max" class="input" />
       </div>
       <button class="btn-primary" :disabled="loading" @click="load">{{ loading ? 'Calculando...' : 'Ver KPIs' }}</button>
-      <button class="btn-secondary" :disabled="!report" @click="downloadReport(report)">Descargar reporte</button>
+      <button class="btn-secondary" :disabled="!report" @click="download">Descargar reporte</button>
       <p class="w-full text-xs text-gray-500">Solo se pueden consultar meses completos (fecha de inicio hasta {{ max }}).</p>
     </section>
 

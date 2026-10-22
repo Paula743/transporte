@@ -1,6 +1,6 @@
 import { HttpError, notFound } from '../../shared/httpError.js'
 import { effectiveTripStatus, hasStarted } from '../../shared/tripStatus.js'
-import { monthPeriod } from '../../shared/period.js'
+import { monthPeriod } from '../../shared/periods.js'
 import { incidentsRepository } from './incident.repository.js'
 import { tripsRepository } from '../trips/trip.repository.js'
 import { routesRepository } from '../routes/route.repository.js'

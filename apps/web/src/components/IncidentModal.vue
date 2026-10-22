@@ -15,10 +15,20 @@ const loading = ref(false)
 function onFile(e) {
   const file = e.target.files[0]
   if (!file) return
-  const reader = new FileReader()
-  reader.onload = () => (photo.value = reader.result) // base64 de ejemplo; en Fase 2 se sube como archivo
-  reader.readAsDataURL(file)
+  const img = new Image()
+  const url = URL.createObjectURL(file)
+  img.onload = () => {
+    const scale = Math.min(1, 800 / Math.max(img.width, img.height))
+    const canvas = document.createElement('canvas')
+    canvas.width = img.width * scale
+    canvas.height = img.height * scale
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+    photo.value = canvas.toDataURL('image/jpeg', 0.7)
+    URL.revokeObjectURL(url)
+  }
+  img.src = url
 }
+
 
 async function send() {
   error.value = ''

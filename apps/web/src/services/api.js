@@ -1,139 +1,82 @@
-import { seed, cities } from './mockData.js'
-import { ymd } from '../utils/format.js'
-import { hasStarted } from '../utils/trip.js'
+import { ymd } from '../utils/format'
 
-const DB_KEY = 'mock_db_v1'
-const HOUR = 3600 * 1000
-let db = JSON.parse(localStorage.getItem(DB_KEY) || 'null') || seed()
+const BASE = import.meta.env.VITE_API_URL || '/api'
+const TOKEN_KEY = 'token'
 
-const save = () => localStorage.setItem(DB_KEY, JSON.stringify(db))
-const wait = (v) => new Promise((r) => setTimeout(() => r(structuredClone(v)), 250))
-const fail = (m) => new Promise((_, rej) => setTimeout(() => rej(new Error(m)), 250))
+async function request(path, { method = 'GET', body, raw = false } = {}) {
+  const headers = {}
+  const token = localStorage.getItem(TOKEN_KEY)
+  if (token) headers.Authorization = `Bearer ${token}`
+  if (body) headers['Content-Type'] = 'application/json'
 
-// El viaje se considera FINALIZADO si el chofer lo finalizó o pasó (llegada + 1 hora)
-export function tripStatus(t) {
-  if (t.status === 'CANCELADO' || t.status === 'FINALIZADO') return t.status
-  return Date.now() > new Date(t.arrival).getTime() + HOUR ? 'FINALIZADO' : 'PROXIMO'
+  let res
+  try {
+    res = await fetch(`${BASE}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined })
+  } catch {
+    throw new Error('No se pudo conectar con el servidor')
+  }
+
+  // Token vencido (dura 1 hora): se cierra la sesión
+  if (res.status === 401 && token && !path.startsWith('/auth/login')) {
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem('session_user')
+    window.location.href = '/login'
+    throw new Error('Tu sesión expiró. Inicia sesión de nuevo.')
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || 'Error del servidor')
+  }
+  if (raw) return res
+  return res.status === 204 ? null : res.json()
 }
 
-const tripView = (t) => ({
-  ...t,
-  status: tripStatus(t),
-  route: db.routes.find((r) => r.id === t.routeId),
-  unit: db.units.find((u) => u.id === t.unitId),
-})
-
-const ticketStatus = (tk) => {
-  if (tk.status === 'CANCELADO') return 'CANCELADO'
-  const trip = db.trips.find((t) => t.id === tk.tripId)
-  return tripStatus(trip) === 'FINALIZADO' ? 'VENCIDO' : 'VALIDO'
+async function download(path, filename) {
+  const res = await request(path, { raw: true })
+  const blob = await res.blob()
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
 }
-
-const publicUser = ({ password, ...u }) => u
 
 // ---------- Auth ----------
 export async function login(email, password) {
-  const u = db.users.find((x) => x.email === email.trim().toLowerCase() && x.password === password)
-  return u ? wait(publicUser(u)) : fail('Correo o contraseña incorrectos')
+  const { token, user } = await request('/auth/login', { method: 'POST', body: { email, password } })
+  localStorage.setItem(TOKEN_KEY, token)
+  return user
 }
 
-export async function register({ name, email, password }) {
-  if (db.users.some((x) => x.email === email.trim().toLowerCase())) return fail('Ese correo ya está registrado')
-  const u = { id: `u${Date.now()}`, name, email: email.trim().toLowerCase(), password, role: 'PASSENGER', points: 0 }
-  db.users.push(u)
-  save()
-  return wait(publicUser(u))
-}
+export const register = (data) => request('/auth/register', { method: 'POST', body: data })
 
 // ---------- Pasajero ----------
-export const getCities = () => wait(cities)
+export const getCities = () => request('/routes/cities')
 
-export async function searchTrips({ origin, destination, date }) {
-  const list = db.trips
-    .map(tripView)
-    .filter((t) => t.status === 'PROXIMO' && new Date(t.departure) > new Date())
-    .filter((t) => t.route.origin === origin && t.route.destination === destination)
-    .filter((t) => ymd(t.departure) === date)
-    .filter((t) => t.unit.availableSeats > 0)
-    .sort((a, b) => new Date(a.departure) - new Date(b.departure))
-  return wait(list)
+export function searchTrips({ origin, destination, date }) {
+  const from = new Date(`${date}T00:00:00`)
+  const to = new Date(from)
+  to.setDate(to.getDate() + 1)
+  const qs = new URLSearchParams({ origin, destination, from: from.toISOString(), to: to.toISOString() })
+  return request(`/trips/search?${qs}`)
 }
 
-export async function buyTickets(userId, tripId, quantity) {
-  const trip = db.trips.find((t) => t.id === tripId)
-  const unit = db.units.find((u) => u.id === trip.unitId)
-  if (!Number.isInteger(quantity) || quantity < 1) return fail('Cantidad inválida')
-  if (quantity > unit.availableSeats) return fail(`Solo quedan ${unit.availableSeats} asientos`)
-  for (let i = 0; i < quantity; i++) {
-    db.tickets.push({
-      id: `T${Date.now()}${i}`, tripId, passengerId: userId,
-      seat: unit.totalSeats - unit.availableSeats + 1, platform: (trip.id.length % 5) + 1,
-      status: 'VALIDO', createdAt: new Date().toISOString(),
-    })
-    unit.availableSeats -= 1
-    if (hasStarted(trip)) return fail('El viaje ya inició; ya no es posible comprar boletos')
-  }
-  // Simulado
-  const route = db.routes.find((r) => r.id === trip.routeId)
-  const passenger = db.users.find((u) => u.id === userId)
-  passenger.points = (passenger.points || 0) + Math.floor((route.price * quantity) / 10)
-  save()
-  return wait({ ok: true })
-}
+export const buyTickets = (userId, tripId, quantity) =>
+  request('/tickets', { method: 'POST', body: { tripId, quantity } })
 
-export async function myTickets(userId) {
-  const list = db.tickets
-    .filter((tk) => tk.passengerId === userId)
-    .map((tk) => ({ ...tk, status: ticketStatus(tk), trip: tripView(db.trips.find((t) => t.id === tk.tripId)) }))
-    .sort((a, b) => new Date(b.trip.departure) - new Date(a.trip.departure))
-  return wait(list)
-}
+export const myTickets = () => request('/tickets/mine')
+export const cancelTicket = (ticketId) => request(`/tickets/${ticketId}/cancel`, { method: 'PATCH' })
+export const downloadTicketPdf = (ticketId) => download(`/tickets/${ticketId}/pdf`, `boleto-${ticketId}.pdf`)
 
-export async function cancelTicket(ticketId) {
-  const tk = db.tickets.find((x) => x.id === ticketId)
-  if (!tk || ticketStatus(tk) !== 'VALIDO' || hasStarted(trip)) return fail('Este boleto ya no se puede cancelar')
-  const trip = db.trips.find((t) => t.id === tk.tripId)
-  db.units.find((u) => u.id === trip.unitId).availableSeats += 1
-  // Simulado
-  const route = db.routes.find((r) => r.id === trip.routeId)
-  const passenger = db.users.find((u) => u.id === tk.passengerId)
-  passenger.points = Math.max(0, (passenger.points || 0) - Math.floor(route.price / 10))
-  save()
-  return wait({ ok: true })
-}
+// ---------- Incidencias ----------
+export const reportIncident = ({ tripId, title, description, photo }) =>
+  request('/incidents', { method: 'POST', body: { tripId, title, description, photo } })
 
-export async function getMyPoints(userId) {
-  const u = db.users.find((x) => x.id === userId)
-  return wait(u?.points ?? 0)
-}
-
-// ---------- Incidencias (pasajero y chofer) ----------
-export async function reportIncident({ tripId, emitterId, emitterRole, title, description, photo }) {
-  const trip = db.trips.find((t) => t.id === tripId)
-  if (!trip) return fail('Viaje no encontrado')
-  if (!hasStarted(trip)) return fail('El viaje aún no inicia; podrás reportar incidencias cuando comience')
-  if (!trip || tripStatus(trip) === 'FINALIZADO') return fail('El viaje ya finalizó')
-  db.incidents.push({ id: `I${Date.now()}`, tripId, emitterId, emitterRole, title, description, photo, createdAt: new Date().toISOString() })
-  save()
-  return wait({ ok: true })
-}
+export const getIncident = (id) => request(`/incidents/${id}`)
 
 // ---------- Chofer ----------
-export async function driverTrips(userId) {
-  const list = db.trips.filter((t) => t.driverId === userId).map(tripView)
-    .sort((a, b) => new Date(a.departure) - new Date(b.departure))
-  return wait(list)
-}
-
-export async function finishTrip(tripId) {
-  const trip = db.trips.find((t) => t.id === tripId)
-  if (!trip || tripStatus(trip) === 'FINALIZADO') return fail('El viaje ya está finalizado')
-  if (!hasStarted(trip)) return fail('El viaje aún no inicia; podrás finalizarlo cuando comience')
-  trip.status = 'FINALIZADO'
-  db.units.find((u) => u.id === trip.unitId).availableSeats = db.units.find((u) => u.id === trip.unitId).totalSeats
-  save()
-  return wait({ ok: true })
-}
+export const driverTrips = () => request('/trips/mine')
+export const finishTrip = (tripId) => request(`/trips/${tripId}/finish`, { method: 'PATCH' })
 
 // ---------- Admin ----------
 export const addMonths = (date, n) => {
@@ -141,85 +84,8 @@ export const addMonths = (date, n) => {
   x.setMonth(x.getMonth() + n)
   return x
 }
-
+export const adminIncidents = (startDate) => request(`/reports/incidents?start=${startDate}`)
 export const maxStartDate = () => ymd(addMonths(new Date(), -1))
-
-const countBy = (arr, keyFn) => {
-  const m = {}
-  arr.forEach((x) => { const k = keyFn(x); m[k] = (m[k] || 0) + 1 })
-  return m
-}
-const toRows = (obj, label = 'name') =>
-  Object.entries(obj).map(([k, v]) => ({ [label]: k, total: v })).sort((a, b) => b.total - a.total)
-
-export async function adminReport(startDate) {
-  if (!startDate || startDate > maxStartDate()) return fail('El mes seleccionado aún no se completa')
-  const start = new Date(`${startDate}T00:00:00`)
-  const end = addMonths(start, 1)
-  const inRange = (iso) => new Date(iso) >= start && new Date(iso) < end
-
-  const trips = db.trips.filter((t) => inRange(t.departure) && tripStatus(t) !== 'CANCELADO')
-  const tripIds = new Set(trips.map((t) => t.id))
-  const routeName = (t) => { const r = db.routes.find((x) => x.id === t.routeId); return `${r.origin} → ${r.destination}` }
-  const incidents = db.incidents.filter((i) => tripIds.has(i.tripId))
-  const tripOf = (id) => db.trips.find((t) => t.id === id)
-
-  const routesCommon = toRows(countBy(trips, routeName), 'route')
-  const routesIncidents = toRows(countBy(incidents, (i) => routeName(tripOf(i.tripId))), 'route')
-  const unitsUsed = toRows(countBy(trips, (t) => db.units.find((u) => u.id === t.unitId).plate), 'unit')
-  const clients = toRows(
-    countBy(db.tickets.filter((tk) => tripIds.has(tk.tripId) && tk.status !== 'CANCELADO'),
-      (tk) => db.users.find((u) => u.id === tk.passengerId)?.name), 'client')
-
-  const drivers = db.users.filter((u) => u.role === 'DRIVER').map((u) => ({
-    driver: u.name,
-    total: incidents.filter((i) => tripOf(i.tripId).driverId === u.id).length,
-  })).sort((a, b) => a.total - b.total)
-
-  const months = []
-  for (let k = 5; k >= 0; k--) {
-    const s = addMonths(start, -k), e = addMonths(s, 1)
-    months.push({
-      month: s.toLocaleDateString('es-MX', { month: 'short', year: 'numeric' }),
-      total: db.trips.filter((t) => new Date(t.departure) >= s && new Date(t.departure) < e).length,
-    })
-  }
-
-  return wait({
-    period: { from: ymd(start), to: ymd(end) },
-    totals: { services: trips.length, incidents: incidents.length },
-    routesCommon, routesIncidents, unitsUsed, clients, drivers, months,
-  })
-}
-
-// export const adminIncidents = (startDate) => request(`/incidents?start=${startDate}`) // API REAL
-// export const getIncident = (id) => request(`/incidents/${id}`) // API REAL
-
-export async function adminIncidents(startDate) {
-  if (!startDate || startDate > maxStartDate()) return fail('El mes seleccionado aún no se completa')
-  const start = new Date(`${startDate}T00:00:00`)
-  const end = addMonths(start, 1)
-
-  const list = db.incidents
-    .map((i) => {
-      const trip = db.trips.find((t) => t.id === i.tripId)
-      const route = db.routes.find((r) => r.id === trip.routeId)
-      const emitter = db.users.find((u) => u.id === i.emitterId)
-      return {
-        id: i.id, tripId: i.tripId, title: i.title, description: i.description,
-        hasPhoto: !!i.photo, createdAt: i.createdAt,
-        emitterName: emitter?.name ?? '—', emitterRole: i.emitterRole,
-        route: `${route.origin} → ${route.destination}`, departure: trip.departure,
-      }
-    })
-    .filter((i) => new Date(i.departure) >= start && new Date(i.departure) < end)
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-  return wait(list)
-}
-
-export async function getIncident(id) {
-  const i = db.incidents.find((x) => x.id === id)
-  if (!i) return fail('Incidencia no encontrada')
-  const emitter = db.users.find((u) => u.id === i.emitterId)
-  return wait({ ...i, emitterName: emitter?.name ?? '—' })
-}
+export const adminReport = (startDate) => request(`/reports/monthly?start=${startDate}`)
+export const downloadMonthlyXlsx = (startDate) =>
+  download(`/reports/monthly/xlsx?start=${startDate}`, `reporte_${startDate}.xlsx`)

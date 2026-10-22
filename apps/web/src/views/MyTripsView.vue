@@ -4,8 +4,7 @@ import AppHeader from '../components/AppHeader.vue'
 import IncidentModal from '../components/IncidentModal.vue'
 import { auth } from '../stores/auth.js'
 import * as api from '../services/api.js'
-import { downloadTicket } from '../utils/ticket.js'
-import { fmtDateTime, money } from '../utils/format.js'
+// import { fmtDateTime, money } from '../utils/format.js'
 import PointsBadge from '../components/PointsBadge.vue'
 import { refreshPoints } from '../stores/points.js'
 import { hasStarted, canReportIncident, incidentHint, useNow } from '../utils/trip.js'
@@ -43,6 +42,15 @@ async function cancel(tk) {
     error.value = e.message
   }
 }
+
+async function download(tk) {
+  error.value = ''
+  try {
+    await api.downloadTicketPdf(tk.id)
+  } catch (e) {
+    error.value = e.message
+  }
+}
 </script>
 
 <template>
@@ -74,7 +82,7 @@ async function cancel(tk) {
           >
             Cancelar viaje
           </button>
-          <button class="btn-secondary" @click="downloadTicket(tk)">Descargar boleto</button>
+          <button class="btn-secondary" @click="download(tk)">Descargar boleto</button>
         </template>
         <button
           class="btn-secondary"
