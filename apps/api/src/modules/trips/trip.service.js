@@ -6,6 +6,8 @@ import { tripsRepository, findByDriver, findByRouteIds } from './trip.repository
 import { routesRepository } from '../routes/route.repository.js'
 import { unitsRepository } from '../units/unit.repository.js'
 import { driversRepository } from '../drivers/driver.repository.js'
+import { passengersRepository } from '../passengers/passenger.repository.js'
+import { ticketsRepository, findByTrip } from '../tickets/ticket.repository.js'
 
 // Agrega ruta y unidad al viaje y calcula el estatus vigente
 export async function withRelations(trip) {
@@ -34,9 +36,33 @@ export async function search({ origin, destination, from, to }) {
   return list.filter((t) => t.unit && t.unit.availableSeats > 0).sort(byDeparture)
 }
 
+// Listado para el administrador: viajes con ruta, unidad, operador y boletos vendidos (más reciente primero)
 export async function listTrips() {
-  const trips = await tripsRepository.findAll()
-  return (await Promise.all(trips.map(withRelations))).sort(byDeparture)
+  const [trips, routes, units, drivers, tickets] = await Promise.all([
+    tripsRepository.findAll(),
+    routesRepository.findAll(),
+    unitsRepository.findAll(),
+    driversRepository.findAll(),
+    ticketsRepository.findAll(),
+  ])
+  const R = Object.fromEntries(routes.map((r) => [r.id, r]))
+  const U = Object.fromEntries(units.map((u) => [u.id, u]))
+  const D = Object.fromEntries(drivers.map((d) => [d.id, d]))
+  const sold = {}
+  tickets.filter((t) => t.status === 'VALIDO').forEach((t) => {
+    sold[t.tripId] = (sold[t.tripId] || 0) + 1
+  })
+
+  return trips
+    .map((t) => ({
+      ...t,
+      status: effectiveTripStatus(t),
+      route: R[t.routeId] ?? null,
+      unit: U[t.unitId] ?? null,
+      driver: D[t.driverId] ? { id: t.driverId, name: D[t.driverId].name, active: D[t.driverId].active !== false } : null,
+      ticketsSold: sold[t.id] || 0,
+    }))
+    .sort((a, b) => byDeparture(b, a))
 }
 
 export async function driverTrips(driverId) {
@@ -44,28 +70,129 @@ export async function driverTrips(driverId) {
   return (await Promise.all(trips.map(withRelations))).sort(byDeparture)
 }
 
-export async function createTrip(data) {
+// Valida ruta, unidad, operador, fechas y empalmes de horario (ignoreId = viaje que se está editando)
+async function validateTripData({ routeId, unitId, driverId, departure, arrival }, ignoreId) {
   const [route, unit, driver] = await Promise.all([
-    routesRepository.findById(data.routeId),
-    unitsRepository.findById(data.unitId),
-    driversRepository.findById(data.driverId),
+    routesRepository.findById(routeId),
+    unitsRepository.findById(unitId),
+    driversRepository.findById(driverId),
   ])
   if (!route) throw notFound('Ruta')
   if (!unit) throw notFound('Unidad')
   if (!driver) throw notFound('Operador')
+  if (['EN_MANTENIMIENTO', 'FUERA_DE_SERVICIO'].includes(unit.status)) {
+    throw new HttpError(409, 'La unidad no está disponible (mantenimiento o fuera de servicio)')
+  }
+  if (driver.active === false) throw new HttpError(409, 'El operador está dado de baja')
 
-  const departure = new Date(data.departure)
-  const arrival = new Date(data.arrival)
-  if (arrival <= departure) throw new HttpError(400, 'La llegada debe ser posterior a la salida')
+  const dep = new Date(departure)
+  const arr = new Date(arrival)
+  if (arr <= dep) throw new HttpError(400, 'La llegada debe ser posterior a la salida')
+  if (dep <= new Date()) throw new HttpError(400, 'La salida debe ser posterior a la fecha y hora actuales')
 
+  const [unitTrips, operatorTrips] = await Promise.all([
+    tripsRepository.findWhere('unitId', '==', unitId),
+    findByDriver(driverId),
+  ])
+  const clash = (t) =>
+    t.id !== ignoreId &&
+    effectiveTripStatus(t) === 'PROXIMO' &&
+    new Date(t.departure) < arr &&
+    new Date(t.arrival) > dep
+  if (unitTrips.some(clash)) throw new HttpError(409, 'La unidad ya tiene un viaje que se empalma con ese horario')
+  if (operatorTrips.some(clash)) throw new HttpError(409, 'El operador ya tiene un viaje que se empalma con ese horario')
+
+  return { dep, arr }
+}
+
+export async function createTrip(data) {
+  const { dep, arr } = await validateTripData(data)
   return tripsRepository.create({
     routeId: data.routeId,
     unitId: data.unitId,
     driverId: data.driverId,
-    departure: departure.toISOString(),
-    arrival: arrival.toISOString(),
+    departure: dep.toISOString(),
+    arrival: arr.toISOString(),
     platform: data.platform ?? 1 + Math.floor(Math.random() * 8),
     status: 'PROXIMO',
+  })
+}
+
+// Solo se editan viajes que aún no inician; con boletos vendidos no se cambia la ruta ni la unidad
+export async function updateTrip(id, data) {
+  const trip = await tripsRepository.findById(id)
+  if (!trip) throw notFound('Viaje')
+  if (trip.status !== 'PROXIMO' || hasStarted(trip)) {
+    throw new HttpError(409, 'Solo se pueden editar viajes que aún no inician')
+  }
+
+  const merged = {
+    routeId: data.routeId ?? trip.routeId,
+    unitId: data.unitId ?? trip.unitId,
+    driverId: data.driverId ?? trip.driverId,
+    departure: data.departure ?? trip.departure,
+    arrival: data.arrival ?? trip.arrival,
+  }
+  const sold = (await findByTrip(id)).filter((t) => t.status !== 'CANCELADO').length
+  if (sold > 0 && (merged.routeId !== trip.routeId || merged.unitId !== trip.unitId)) {
+    throw new HttpError(409, 'El viaje ya tiene boletos vendidos; no se puede cambiar la ruta ni la unidad')
+  }
+
+  const { dep, arr } = await validateTripData(merged, id)
+  const patch = {
+    routeId: merged.routeId,
+    unitId: merged.unitId,
+    driverId: merged.driverId,
+    departure: dep.toISOString(),
+    arrival: arr.toISOString(),
+  }
+  if (data.platform !== undefined) patch.platform = data.platform
+  return tripsRepository.update(id, patch)
+}
+
+// El administrador cancela un viaje que aún no inicia: cancela sus boletos, devuelve los puntos y libera los asientos
+export async function cancelTrip(tripId) {
+  const tripRef = tripsRepository.col.doc(tripId)
+  await db.runTransaction(async (tx) => {
+    const tripSnap = await tx.get(tripRef)
+    if (!tripSnap.exists) throw notFound('Viaje')
+    const trip = tripSnap.data()
+    if (trip.status === 'CANCELADO') throw new HttpError(409, 'El viaje ya está cancelado')
+    if (trip.status !== 'PROXIMO' || hasStarted(trip)) {
+      throw new HttpError(409, 'Solo se pueden cancelar viajes que aún no inician')
+    }
+
+    const unitRef = unitsRepository.col.doc(trip.unitId)
+    const routeRef = routesRepository.col.doc(trip.routeId)
+    const [unitSnap, routeSnap, ticketsSnap] = await Promise.all([
+      tx.get(unitRef),
+      tx.get(routeRef),
+      tx.get(ticketsRepository.col.where('tripId', '==', tripId)),
+    ])
+    const valid = ticketsSnap.docs.filter((d) => d.data().status === 'VALIDO')
+    const price = routeSnap.exists ? routeSnap.data().price : 0
+    const now = new Date().toISOString()
+
+    tx.update(tripRef, { status: 'CANCELADO', cancelledAt: now })
+
+    const perPassenger = {}
+    valid.forEach((d) => {
+      tx.update(d.ref, { status: 'CANCELADO', cancelledAt: now, cancelReason: 'VIAJE_CANCELADO' })
+      const pid = d.data().passengerId
+      perPassenger[pid] = (perPassenger[pid] || 0) + 1
+    })
+    // Mismos puntos que se otorgaron al comprar: 1 punto por cada $10
+    Object.entries(perPassenger).forEach(([pid, n]) => {
+      tx.set(
+        passengersRepository.col.doc(pid),
+        { points: FieldValue.increment(-Math.floor((price * n) / 10)) },
+        { merge: true },
+      )
+    })
+    if (unitSnap.exists) {
+      const unit = unitSnap.data()
+      tx.update(unitRef, { availableSeats: Math.min(unit.totalSeats, unit.availableSeats + valid.length) })
+    }
   })
 }
 
@@ -77,6 +204,7 @@ async function closeTrip(tripId, { driverId } = {}) {
     if (!tripSnap.exists) throw notFound('Viaje')
     const trip = tripSnap.data()
     if (driverId && trip.driverId !== driverId) throw new HttpError(403, 'Este viaje no está asignado a ti')
+    if (trip.status === 'CANCELADO') throw new HttpError(409, 'El viaje fue cancelado')
     if (trip.status !== 'PROXIMO' || (driverId && effectiveTripStatus(trip) === 'FINALIZADO')) {
       throw new HttpError(409, 'El viaje ya está finalizado')
     }

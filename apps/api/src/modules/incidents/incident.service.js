@@ -12,7 +12,7 @@ export async function createIncident(user, { tripId, title, description, photo }
   const trip = await tripsRepository.findById(tripId)
   if (!trip) throw notFound('Viaje')
   if (!hasStarted(trip)) throw new HttpError(409, 'El viaje aún no inicia; podrás reportar incidencias cuando comience')
-  if (effectiveTripStatus(trip) === 'FINALIZADO') throw new HttpError(409, 'El viaje ya finalizó')
+  if (effectiveTripStatus(trip) !== 'PROXIMO') throw new HttpError(409, 'El viaje ya finalizó o fue cancelado')
 
   if (user.role === 'DRIVER' && trip.driverId !== user.id) {
     throw new HttpError(403, 'Este viaje no está asignado a ti')

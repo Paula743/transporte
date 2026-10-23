@@ -3,3 +3,4 @@ import * as service from './auth.service.js'
 export const register = async (req, res) => res.status(201).json(await service.register({ ...req.valid.body, role: 'PASSENGER' }))
 export const login = async (req, res) => res.json(await service.login(req.valid.body))
 export const me = (req, res) => res.json(req.user)
+export const changePassword = async (req, res) => res.json(await service.changePassword(req.user, req.valid.body))

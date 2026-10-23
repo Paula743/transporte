@@ -1,6 +1,5 @@
 <script setup>
 import { ref, computed } from 'vue'
-import AppHeader from '../components/AppHeader.vue'
 import * as api from '../services/api'
 import { fmtDateTime } from '../utils/format'
 
@@ -69,9 +68,7 @@ async function download() {
 </script>
 
 <template>
-  <AppHeader title="Panel del administrador" />
-
-  <main class="mx-auto max-w-6xl space-y-4 p-4">
+  <div class="space-y-4">
     <section class="card flex flex-wrap items-end gap-3">
       <div>
         <label class="label">Fecha de inicio (el reporte cubre 1 mes)</label>
@@ -167,5 +164,5 @@ async function download() {
         </div>
       </div>
     </div>
-  </main>
+  </div>
 </template>

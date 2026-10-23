@@ -14,3 +14,14 @@ export const loginSchema = z.object({
 
 // El registro público no recibe rol: solo crea pasajeros
 export const publicRegisterSchema = registerSchema.omit({ role: true })
+
+// Cambio de contraseña (también reemplaza la contraseña temporal de un operador)
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Escribe tu contraseña actual'),
+    newPassword: z.string().min(8, 'La nueva contraseña debe tener al menos 8 caracteres'),
+  })
+  .refine((d) => d.newPassword !== d.currentPassword, {
+    message: 'La nueva contraseña debe ser distinta a la actual',
+    path: ['newPassword'],
+  })

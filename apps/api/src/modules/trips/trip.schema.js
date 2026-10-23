@@ -11,6 +11,8 @@ export const tripCreateSchema = z.object({
   platform: z.number().int().min(1).max(20).optional(),
 })
 
+export const tripUpdateSchema = tripCreateSchema.partial()
+
 export const searchSchema = z.object({
   origin: z.string().min(2),
   destination: z.string().min(2),

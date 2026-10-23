@@ -14,7 +14,7 @@ async function submit() {
   loading.value = true
   try {
     const user = await login(email.value, password.value)
-    router.push(homeFor(user.role))
+    router.push(user.mustChangePassword ? '/change-password' : homeFor(user.role))
   } catch (e) {
     error.value = e.message
   } finally {

@@ -13,3 +13,10 @@ export const fmtDateTime = (iso) => `${fmtDate(iso)} ${fmtTime(iso)}`
 
 export const money = (n) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n)
+
+// ISO -> valor para <input type="datetime-local"> (hora local, sin segundos)
+export const toLocalInput = (iso) => {
+  const d = new Date(iso)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}

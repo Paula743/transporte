@@ -4,9 +4,10 @@ import { ref, onMounted, onUnmounted } from 'vue'
 export const hasStarted = (trip, now = Date.now()) => now >= new Date(trip.departure).getTime()
 
 // Las incidencias solo se reportan con el viaje en curso: ya salió y aún no finaliza
-export const canReportIncident = (trip, now = Date.now()) => hasStarted(trip, now) && trip.status !== 'FINALIZADO'
+export const canReportIncident = (trip, now = Date.now()) => hasStarted(trip, now) && trip.status === 'PROXIMO'
 
 export const incidentHint = (trip, now = Date.now()) => {
+  if (trip.status === 'CANCELADO') return 'El viaje fue cancelado'
   if (!hasStarted(trip, now)) return 'Podrás reportar incidencias cuando el viaje inicie'
   if (trip.status === 'FINALIZADO') return 'El viaje ya finalizó'
   return ''
@@ -22,9 +23,10 @@ export function useNow(ms = 30000) {
 }
 
 // El operador solo puede finalizar un viaje en curso: ya salió y aún no finaliza
-export const canFinishTrip = (trip, now = Date.now()) => hasStarted(trip, now) && trip.status !== 'FINALIZADO'
+export const canFinishTrip = (trip, now = Date.now()) => hasStarted(trip, now) && trip.status === 'PROXIMO'
 
 export const finishHint = (trip, now = Date.now()) => {
+  if (trip.status === 'CANCELADO') return 'El viaje fue cancelado'
   if (!hasStarted(trip, now)) return 'Podrás finalizar el viaje cuando inicie'
   if (trip.status === 'FINALIZADO') return 'El viaje ya finalizó'
   return ''
