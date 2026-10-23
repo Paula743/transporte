@@ -8,7 +8,9 @@
     "dev": "node --env-file=.env --watch src/server.js",
     "start": "node --env-file=.env src/server.js",
     "create-admin": "node --env-file=.env scripts/createAdmin.js",
-    "check-db": "node --env-file=.env scripts/checkDb.js"
+    "seed": "node --env-file=.env scripts/seed.js",
+    "check-db": "node --env-file=.env scripts/checkDb.js",
+    "migrate-seats": "node --env-file=.env scripts/migrateSeats.js"
   },
   "keywords": [],
   "author": "",

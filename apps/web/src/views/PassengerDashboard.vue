@@ -92,7 +92,7 @@ async function buy(t) {
           <!-- <p class="text-lg font-semibold">{{ fmtTime(t.departure) }} → {{ fmtTime(t.arrival) }}</p> -->
           <p class="text-lg font-semibold">{{ fmtTime(t.departure) }}</p>
           <p class="text-sm text-gray-500">{{ t.route.origin }} → {{ t.route.destination }} · {{ t.route.km }} km</p>
-          <p class="text-sm text-gray-500">{{ t.unit.availableSeats }} asientos disponibles</p>
+          <p class="text-sm text-gray-500">{{ t.availableSeats }} asientos disponibles</p>
         </div>
         <div class="text-right">
           <p class="text-xl font-bold text-emerald-700">{{ money(t.route.price) }}</p>
@@ -101,7 +101,7 @@ async function buy(t) {
         <div class="flex items-end gap-3">
           <div>
             <label class="label">Boletos</label>
-            <input v-model.number="qty[t.id]" type="number" min="1" :max="t.unit.availableSeats" class="input w-20" />
+            <input v-model.number="qty[t.id]" type="number" min="1" :max="t.availableSeats" class="input w-20" />
           </div>
           <div class="text-sm">
             <p class="text-gray-500">Total</p>

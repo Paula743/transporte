@@ -33,7 +33,7 @@ export async function search({ origin, destination, from, to }) {
   })
 
   const list = await Promise.all(candidates.map(withRelations))
-  return list.filter((t) => t.unit && t.unit.availableSeats > 0).sort(byDeparture)
+  return list.filter((t) => t.unit && t.availableSeats > 0).sort(byDeparture)
 }
 
 // Listado para el administrador: viajes con ruta, unidad, operador y boletos vendidos (más reciente primero)
@@ -102,11 +102,11 @@ async function validateTripData({ routeId, unitId, driverId, departure, arrival 
   if (unitTrips.some(clash)) throw new HttpError(409, 'La unidad ya tiene un viaje que se empalma con ese horario')
   if (operatorTrips.some(clash)) throw new HttpError(409, 'El operador ya tiene un viaje que se empalma con ese horario')
 
-  return { dep, arr }
+  return { dep, arr, unit }
 }
 
 export async function createTrip(data) {
-  const { dep, arr } = await validateTripData(data)
+  const { dep, arr, unit } = await validateTripData(data)
   return tripsRepository.create({
     routeId: data.routeId,
     unitId: data.unitId,
@@ -114,6 +114,9 @@ export async function createTrip(data) {
     departure: dep.toISOString(),
     arrival: arr.toISOString(),
     platform: data.platform ?? 1 + Math.floor(Math.random() * 8),
+    // Cada viaje lleva su propia cuenta de asientos, copiando la capacidad de la unidad
+    totalSeats: unit.totalSeats,
+    availableSeats: unit.totalSeats,
     status: 'PROXIMO',
   })
 }
@@ -138,13 +141,18 @@ export async function updateTrip(id, data) {
     throw new HttpError(409, 'El viaje ya tiene boletos vendidos; no se puede cambiar la ruta ni la unidad')
   }
 
-  const { dep, arr } = await validateTripData(merged, id)
+  const { dep, arr, unit } = await validateTripData(merged, id)
   const patch = {
     routeId: merged.routeId,
     unitId: merged.unitId,
     driverId: merged.driverId,
     departure: dep.toISOString(),
     arrival: arr.toISOString(),
+  }
+  // Si cambia la unidad (solo posible sin boletos) o el viaje no tenía asientos configurados, toma la capacidad de la unidad
+  if (merged.unitId !== trip.unitId || typeof trip.totalSeats !== 'number') {
+    patch.totalSeats = unit.totalSeats
+    patch.availableSeats = Math.max(0, unit.totalSeats - sold)
   }
   if (data.platform !== undefined) patch.platform = data.platform
   return tripsRepository.update(id, patch)
@@ -162,10 +170,8 @@ export async function cancelTrip(tripId) {
       throw new HttpError(409, 'Solo se pueden cancelar viajes que aún no inician')
     }
 
-    const unitRef = unitsRepository.col.doc(trip.unitId)
     const routeRef = routesRepository.col.doc(trip.routeId)
-    const [unitSnap, routeSnap, ticketsSnap] = await Promise.all([
-      tx.get(unitRef),
+    const [routeSnap, ticketsSnap] = await Promise.all([
       tx.get(routeRef),
       tx.get(ticketsRepository.col.where('tripId', '==', tripId)),
     ])
@@ -173,7 +179,12 @@ export async function cancelTrip(tripId) {
     const price = routeSnap.exists ? routeSnap.data().price : 0
     const now = new Date().toISOString()
 
-    tx.update(tripRef, { status: 'CANCELADO', cancelledAt: now })
+    // Al cancelar el viaje todos sus boletos se cancelan, así que sus asientos quedan libres
+    tx.update(tripRef, {
+      status: 'CANCELADO',
+      cancelledAt: now,
+      ...(typeof trip.totalSeats === 'number' ? { availableSeats: trip.totalSeats } : {}),
+    })
 
     const perPassenger = {}
     valid.forEach((d) => {
@@ -189,14 +200,10 @@ export async function cancelTrip(tripId) {
         { merge: true },
       )
     })
-    if (unitSnap.exists) {
-      const unit = unitSnap.data()
-      tx.update(unitRef, { availableSeats: Math.min(unit.totalSeats, unit.availableSeats + valid.length) })
-    }
   })
 }
 
-// Cierra un viaje: lo marca FINALIZADO, libera los asientos y suma kilometraje a la unidad
+// Cierra un viaje: lo marca FINALIZADO y suma el kilometraje de la ruta a la unidad
 async function closeTrip(tripId, { driverId } = {}) {
   const tripRef = tripsRepository.col.doc(tripId)
   await db.runTransaction(async (tx) => {
@@ -218,10 +225,7 @@ async function closeTrip(tripId, { driverId } = {}) {
 
     tx.update(tripRef, { status: 'FINALIZADO', finishedAt: new Date().toISOString() })
     if (unitSnap.exists) {
-      tx.update(unitRef, {
-        availableSeats: unitSnap.data().totalSeats,
-        accumulatedKm: FieldValue.increment(routeSnap.exists ? routeSnap.data().km : 0),
-      })
+      tx.update(unitRef, { accumulatedKm: FieldValue.increment(routeSnap.exists ? routeSnap.data().km : 0) })
     }
   })
 }

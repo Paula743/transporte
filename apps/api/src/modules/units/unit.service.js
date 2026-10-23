@@ -5,9 +5,12 @@ import { tripsRepository } from '../trips/trip.repository.js'
 
 const plateKey = (p) => p.trim().toUpperCase()
 
+// Los asientos disponibles ya no viven en la unidad sino en cada viaje (se ignora el campo antiguo)
 export async function listUnits() {
   const units = await unitsRepository.findAll()
-  return units.sort((a, b) => a.plate.localeCompare(b.plate, 'es'))
+  return units
+    .map(({ availableSeats, ...unit }) => unit)
+    .sort((a, b) => a.plate.localeCompare(b.plate, 'es'))
 }
 
 export async function getUnit(id) {
@@ -23,7 +26,7 @@ async function assertPlateFree(plate, ignoreId) {
   }
 }
 
-// Al crear una unidad, todos sus asientos están disponibles
+// La unidad solo guarda su capacidad (totalSeats); cada viaje copia esa capacidad y lleva su propia cuenta de asientos
 export async function createUnit(data) {
   const plate = plateKey(data.plate)
   await assertPlateFree(plate)
@@ -32,22 +35,17 @@ export async function createUnit(data) {
     accumulatedKm: 0,
     ...data,
     plate,
-    availableSeats: data.totalSeats,
   })
 }
 
 export async function updateUnit(id, data) {
-  const unit = await getUnit(id)
+  await getUnit(id)
   const patch = { ...data }
   if (data.plate) {
     patch.plate = plateKey(data.plate)
     await assertPlateFree(patch.plate, id)
   }
-  if (data.totalSeats !== undefined) {
-    const used = unit.totalSeats - unit.availableSeats
-    if (data.totalSeats < used) throw new HttpError(409, 'Hay más asientos ocupados que el nuevo total')
-    patch.availableSeats = data.totalSeats - used
-  }
+  // Cambiar totalSeats solo afecta a los viajes que se registren después: los ya programados conservan su capacidad
   return unitsRepository.update(id, patch)
 }
 

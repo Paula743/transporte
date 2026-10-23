@@ -7,7 +7,6 @@ import { effectiveTripStatus, effectiveTicketStatus, hasStarted } from '../../sh
 import { ticketsRepository, findByPassenger } from './ticket.repository.js'
 import { tripsRepository } from '../trips/trip.repository.js'
 import { withRelations } from '../trips/trip.service.js'
-import { unitsRepository } from '../units/unit.repository.js'
 import { routesRepository } from '../routes/route.repository.js'
 import { passengersRepository } from '../passengers/passenger.repository.js'
 
@@ -23,24 +22,25 @@ export async function buy(user, { tripId, quantity }) {
     if (hasStarted(trip)) throw new HttpError(409, 'El viaje ya inició; ya no es posible comprar boletos')
     if (effectiveTripStatus(trip) !== 'PROXIMO') throw new HttpError(409, 'Este viaje ya no está disponible')
 
-    const unitRef = unitsRepository.col.doc(trip.unitId)
     const routeRef = routesRepository.col.doc(trip.routeId)
-    const [unitSnap, routeSnap, takenSnap] = await Promise.all([
-      tx.get(unitRef),
+    const [routeSnap, takenSnap] = await Promise.all([
       tx.get(routeRef),
       tx.get(ticketsRepository.col.where('tripId', '==', tripId)),
     ])
-    const unit = unitSnap.data()
     const route = routeSnap.data()
 
-    if (quantity > unit.availableSeats) {
-      throw new HttpError(409, `Solo quedan ${unit.availableSeats} asientos disponibles`)
+    // Los asientos se controlan por viaje (no por unidad)
+    if (typeof trip.availableSeats !== 'number' || typeof trip.totalSeats !== 'number') {
+      throw new HttpError(409, 'Este viaje no tiene asientos configurados. Ejecuta: npm run migrate-seats -w apps/api')
+    }
+    if (quantity > trip.availableSeats) {
+      throw new HttpError(409, `Solo quedan ${trip.availableSeats} asientos disponibles`)
     }
 
     // Asientos libres más bajos (ignora los boletos cancelados)
     const taken = new Set(takenSnap.docs.map((d) => d.data()).filter((t) => t.status === 'VALIDO').map((t) => t.seat))
     const seats = []
-    for (let s = 1; seats.length < quantity && s <= unit.totalSeats; s++) if (!taken.has(s)) seats.push(s)
+    for (let s = 1; seats.length < quantity && s <= trip.totalSeats; s++) if (!taken.has(s)) seats.push(s)
     if (seats.length < quantity) throw new HttpError(409, 'No hay asientos suficientes')
 
     const createdAt = new Date().toISOString()
@@ -51,7 +51,7 @@ export async function buy(user, { tripId, quantity }) {
       return { id: ref.id, ...data }
     })
 
-    tx.update(unitRef, { availableSeats: unit.availableSeats - quantity })
+    tx.update(tripRef, { availableSeats: trip.availableSeats - quantity })
     tx.set(
       passengersRepository.col.doc(user.id),
       { points: FieldValue.increment(pointsFor(route.price, quantity)) },
@@ -93,12 +93,13 @@ export async function cancel(user, ticketId) {
       throw new HttpError(409, 'Este boleto ya no se puede cancelar')
     }
 
-    const unitRef = unitsRepository.col.doc(trip.unitId)
-    const [unitSnap, routeSnap] = await Promise.all([tx.get(unitRef), tx.get(routesRepository.col.doc(trip.routeId))])
-    const unit = unitSnap.data()
+    const routeSnap = await tx.get(routesRepository.col.doc(trip.routeId))
 
     tx.update(ticketRef, { status: 'CANCELADO', cancelledAt: new Date().toISOString() })
-    tx.update(unitRef, { availableSeats: Math.min(unit.totalSeats, unit.availableSeats + 1) })
+    // El asiento vuelve a quedar disponible en el viaje
+    if (typeof trip.totalSeats === 'number' && typeof trip.availableSeats === 'number') {
+      tx.update(tripSnap.ref, { availableSeats: Math.min(trip.totalSeats, trip.availableSeats + 1) })
+    }
     tx.set(
       passengersRepository.col.doc(user.id),
       { points: FieldValue.increment(-pointsFor(routeSnap.data().price, 1)) },

@@ -127,7 +127,7 @@ async function remove(u) {
         <thead class="border-b text-xs uppercase text-gray-500">
           <tr>
             <th class="py-2 pr-3">Placa</th>
-            <th class="py-2 pr-3">Asientos (disp. / total)</th>
+            <th class="py-2 pr-3">Asientos</th>
             <th class="py-2 pr-3">Km acumulados</th>
             <th class="py-2 pr-3">Estatus</th>
             <th class="py-2"></th>
@@ -136,7 +136,7 @@ async function remove(u) {
         <tbody>
           <tr v-for="u in filtered" :key="u.id" class="border-b last:border-0" :class="u.status === 'EN_MANTENIMIENTO' ? 'bg-amber-50' : ''">
             <td class="py-2 pr-3 font-medium">{{ u.plate }}</td>
-            <td class="py-2 pr-3">{{ u.availableSeats }} / {{ u.totalSeats }}</td>
+            <td class="py-2 pr-3">{{ u.totalSeats }}</td>
             <td class="py-2 pr-3">{{ Number(u.accumulatedKm).toLocaleString('es-MX') }} km</td>
             <td class="py-2 pr-3">
               <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="(statusInfo[u.status] || [])[1]">
@@ -176,7 +176,7 @@ async function remove(u) {
           </div>
         </div>
         <p v-if="modal.id" class="text-xs text-gray-500">
-          Los asientos disponibles se ajustan solos según los asientos ocupados. El estatus se cambia con el botón de mantenimiento.
+          Cada viaje copia los asientos de la unidad al registrarse: este cambio solo aplica a los viajes nuevos. El estatus se cambia con el botón de mantenimiento.
         </p>
         <p v-if="formError" class="text-sm text-red-600">{{ formError }}</p>
         <div class="flex justify-end gap-2">

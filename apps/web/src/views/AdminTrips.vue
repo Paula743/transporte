@@ -151,6 +151,7 @@ async function cancelTrip(t) {
             <th class="py-2 pr-3">Unidad</th>
             <th class="py-2 pr-3">Operador</th>
             <th class="py-2 pr-3">Boletos</th>
+            <th class="py-2 pr-3">Asientos libres</th>
             <th class="py-2 pr-3">Estatus</th>
             <th class="py-2"></th>
           </tr>
@@ -169,6 +170,7 @@ async function cancelTrip(t) {
               <span v-if="t.driver && !t.driver.active" class="ml-1 text-xs text-red-600">(de baja)</span>
             </td>
             <td class="py-2 pr-3">{{ t.ticketsSold }}</td>
+            <td class="whitespace-nowrap py-2 pr-3">{{ t.availableSeats ?? '—' }} / {{ t.totalSeats ?? '—' }}</td>
             <td class="py-2 pr-3">
               <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="phaseClass[tripPhase(t, now)]">
                 {{ phaseLabel[tripPhase(t, now)] }}
@@ -192,6 +194,7 @@ async function cancelTrip(t) {
         <p v-if="modal.ticketsSold" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-700">
           Este viaje ya tiene {{ modal.ticketsSold }} boleto(s) vendido(s): no se puede cambiar la ruta ni la unidad.
         </p>
+        <p v-if="!modal.id" class="text-xs text-gray-500">El viaje toma la capacidad de asientos de la unidad que elijas y lleva su propia cuenta de asientos disponibles.</p>
         <div class="grid gap-3 sm:grid-cols-2">
           <div class="sm:col-span-2">
             <label class="label">Ruta</label>
