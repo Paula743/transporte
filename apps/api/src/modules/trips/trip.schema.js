@@ -13,6 +13,18 @@ export const tripCreateSchema = z.object({
 
 export const tripUpdateSchema = tripCreateSchema.partial()
 
+// Reasignación: operador, unidad o ambos (al menos uno)
+export const tripReassignSchema = z
+  .object({
+    driverId: z.string().min(1).optional(),
+    unitId: z.string().min(1).optional(),
+    reason: z.string().trim().max(200, 'Máximo 200 caracteres').optional(),
+  })
+  .refine((d) => d.driverId || d.unitId, {
+    message: 'Selecciona un operador, una unidad o ambos',
+    path: ['driverId'],
+  })
+
 export const searchSchema = z.object({
   origin: z.string().min(2),
   destination: z.string().min(2),

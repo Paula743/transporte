@@ -85,6 +85,8 @@ export const reportIncident = ({ tripId, title, description, photo }) =>
   request('/incidents', { method: 'POST', body: { tripId, title, description, photo } })
 
 export const getIncident = (id) => request(`/incidents/${id}`)
+// Todas las incidencias (más reciente primero), o solo las de un viaje
+export const listIncidents = ({ tripId } = {}) => request(`/incidents${tripId ? `?tripId=${encodeURIComponent(tripId)}` : ''}`)
 
 // ---------- Chofer ----------
 export const driverTrips = () => request('/trips/mine')
@@ -117,6 +119,9 @@ export const deleteUnit = (id) => request(`/units/${id}`, { method: 'DELETE' })
 // status: 'EN_MANTENIMIENTO' (enviar a mantenimiento) o 'DISPONIBLE' (regresar a servicio)
 export const setUnitStatus = (id, status) => request(`/units/${id}/status`, { method: 'PATCH', body: { status } })
 
+// ---------- Admin: pasajeros (solo consulta) ----------
+export const listPassengers = () => request('/passengers')
+
 // ---------- Admin: operadores ----------
 export const listDrivers = () => request('/drivers')
 export const createDriver = (data) => request('/drivers', { method: 'POST', body: data })
@@ -130,3 +135,9 @@ export const listTrips = () => request('/trips')
 export const createTrip = (data) => request('/trips', { method: 'POST', body: data })
 export const updateTrip = (id, data) => request(`/trips/${id}`, { method: 'PATCH', body: data })
 export const cancelTrip = (id) => request(`/trips/${id}/cancel`, { method: 'PATCH' })
+// Reasigna el operador y/o la unidad (solo se envían los campos elegidos)
+export const reassignTrip = (id, { driverId, unitId, reason }) =>
+  request(`/trips/${id}/reassign`, {
+    method: 'PATCH',
+    body: { ...(driverId ? { driverId } : {}), ...(unitId ? { unitId } : {}), ...(reason ? { reason } : {}) },
+  })

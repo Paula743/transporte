@@ -42,7 +42,7 @@ export async function monthlyReport(startStr) {
   const routeName = (t) => (R[t.routeId] ? `${R[t.routeId].origin} → ${R[t.routeId].destination}` : 'Ruta eliminada')
 
   const drivers = data.drivers
-    .map((d) => ({ driver: d.name, total: incidents.filter((i) => T[i.tripId]?.driverId === d.id).length }))
+    .map((d) => ({ driver: d.name, total: incidents.filter((i) => (i.tripDriverId ?? T[i.tripId]?.driverId) === d.id).length }))
     .sort((a, b) => a.total - b.total) // menos incidencias primero
 
   const months = []

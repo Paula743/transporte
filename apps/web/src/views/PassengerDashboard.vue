@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import AppHeader from '../components/AppHeader.vue'
 import { auth } from '../stores/auth.js'
 import * as api from '../services/api.js'
@@ -16,6 +16,15 @@ const msg = ref('')
 const error = ref('')
 
 onMounted(async () => (cities.value = await api.getCities()))
+
+// El destino no ofrece la ciudad de origen elegida (y si ya estaba elegida como destino, se limpia)
+const destinationOptions = computed(() => cities.value.filter((c) => c !== form.value.origin))
+watch(
+  () => form.value.origin,
+  (origin) => {
+    if (form.value.destination === origin) form.value.destination = ''
+  },
+)
 
 async function runSearch() {
   results.value = await api.searchTrips(form.value)
@@ -69,7 +78,7 @@ async function buy(t) {
         <label class="label">Ciudad de destino</label>
         <select v-model="form.destination" class="input">
           <option value="" disabled>Selecciona</option>
-          <option v-for="c in cities" :key="c">{{ c }}</option>
+          <option v-for="c in destinationOptions" :key="c">{{ c }}</option>
         </select>
       </div>
       <div>

@@ -8,6 +8,7 @@ import { unitsRepository } from '../units/unit.repository.js'
 import { driversRepository } from '../drivers/driver.repository.js'
 import { passengersRepository } from '../passengers/passenger.repository.js'
 import { ticketsRepository, findByTrip } from '../tickets/ticket.repository.js'
+import { countByTrip } from '../incidents/incident.repository.js'
 
 // Agrega ruta y unidad al viaje y calcula el estatus vigente
 export async function withRelations(trip) {
@@ -38,12 +39,13 @@ export async function search({ origin, destination, from, to }) {
 
 // Listado para el administrador: viajes con ruta, unidad, operador y boletos vendidos (más reciente primero)
 export async function listTrips() {
-  const [trips, routes, units, drivers, tickets] = await Promise.all([
+  const [trips, routes, units, drivers, tickets, incidentCounts] = await Promise.all([
     tripsRepository.findAll(),
     routesRepository.findAll(),
     unitsRepository.findAll(),
     driversRepository.findAll(),
     ticketsRepository.findAll(),
+    countByTrip(),
   ])
   const R = Object.fromEntries(routes.map((r) => [r.id, r]))
   const U = Object.fromEntries(units.map((u) => [u.id, u]))
@@ -61,6 +63,7 @@ export async function listTrips() {
       unit: U[t.unitId] ?? null,
       driver: D[t.driverId] ? { id: t.driverId, name: D[t.driverId].name, active: D[t.driverId].active !== false } : null,
       ticketsSold: sold[t.id] || 0,
+      incidentsCount: incidentCounts[t.id] || 0,
     }))
     .sort((a, b) => byDeparture(b, a))
 }
@@ -156,6 +159,98 @@ export async function updateTrip(id, data) {
   }
   if (data.platform !== undefined) patch.platform = data.platform
   return tripsRepository.update(id, patch)
+}
+
+// Reasigna el operador y/o la unidad de un viaje programado que aún no inicia (un viaje en curso no se reasigna)
+export async function reassignTrip(tripId, { driverId, unitId, reason } = {}) {
+  if (!driverId && !unitId) throw new HttpError(400, 'Selecciona un operador, una unidad o ambos')
+
+  const tripRef = tripsRepository.col.doc(tripId)
+  const trip = await tripsRepository.findById(tripId)
+  if (!trip) throw notFound('Viaje')
+  if (trip.status !== 'PROXIMO' || hasStarted(trip)) {
+    throw new HttpError(409, 'Solo se puede reasignar en viajes programados que aún no inician')
+  }
+
+  const changeDriver = !!driverId && driverId !== trip.driverId
+  const changeUnit = !!unitId && unitId !== trip.unitId
+  if (!changeDriver && !changeUnit) {
+    throw new HttpError(409, 'El operador y la unidad elegidos ya están asignados a este viaje')
+  }
+
+  const dep = new Date(trip.departure)
+  const arr = new Date(trip.arrival)
+  const clash = (t) =>
+    t.id !== tripId &&
+    effectiveTripStatus(t) === 'PROXIMO' &&
+    new Date(t.departure) < arr &&
+    new Date(t.arrival) > dep
+
+  if (changeDriver) {
+    const driver = await driversRepository.findById(driverId)
+    if (!driver) throw notFound('Operador')
+    if (driver.active === false) throw new HttpError(409, 'El operador está dado de baja')
+    if ((await findByDriver(driverId)).some(clash)) {
+      throw new HttpError(409, 'El operador ya tiene un viaje que se empalma con ese horario')
+    }
+  }
+
+  let newUnit = null
+  if (changeUnit) {
+    newUnit = await unitsRepository.findById(unitId)
+    if (!newUnit) throw notFound('Unidad')
+    if (['EN_MANTENIMIENTO', 'FUERA_DE_SERVICIO'].includes(newUnit.status)) {
+      throw new HttpError(409, 'La unidad no está disponible (mantenimiento o fuera de servicio)')
+    }
+    if ((await tripsRepository.findWhere('unitId', '==', unitId)).some(clash)) {
+      throw new HttpError(409, 'La unidad ya tiene un viaje que se empalma con ese horario')
+    }
+  }
+
+  const now = new Date().toISOString()
+  await db.runTransaction(async (tx) => {
+    // Se vuelve a verificar dentro de la transacción por si el viaje cambió mientras tanto
+    const snap = await tx.get(tripRef)
+    if (!snap.exists) throw notFound('Viaje')
+    const current = snap.data()
+    if (current.status !== 'PROXIMO' || hasStarted(current)) {
+      throw new HttpError(409, 'Solo se puede reasignar en viajes programados que aún no inician')
+    }
+    if (current.driverId !== trip.driverId || current.unitId !== trip.unitId) {
+      throw new HttpError(409, 'El viaje fue modificado; vuelve a intentarlo')
+    }
+
+    const patch = { reassignedAt: now }
+    const entries = []
+    const why = reason ? { reason } : {}
+
+    if (changeDriver) {
+      patch.driverId = driverId
+      entries.push({ type: 'DRIVER', from: trip.driverId, to: driverId, at: now, ...why })
+    }
+
+    if (changeUnit) {
+      // Los asientos ya vendidos se conservan: la nueva unidad debe tener lugar para el asiento más alto vendido
+      const ticketsSnap = await tx.get(ticketsRepository.col.where('tripId', '==', tripId))
+      const seats = ticketsSnap.docs.map((d) => d.data()).filter((t) => t.status === 'VALIDO').map((t) => t.seat)
+      const highest = seats.length ? Math.max(...seats) : 0
+      if (newUnit.totalSeats < highest) {
+        throw new HttpError(
+          409,
+          `La unidad ${newUnit.plate} tiene ${newUnit.totalSeats} asientos y en este viaje ya se vendió el asiento ${highest}`,
+        )
+      }
+      patch.unitId = unitId
+      patch.totalSeats = newUnit.totalSeats
+      patch.availableSeats = newUnit.totalSeats - seats.length
+      entries.push({ type: 'UNIT', from: trip.unitId, to: unitId, at: now, ...why })
+    }
+
+    // Historial: cada cambio guarda de qué a qué, cuándo y por qué
+    patch.reassignments = FieldValue.arrayUnion(...entries)
+    tx.update(tripRef, patch)
+  })
+  return tripsRepository.findById(tripId)
 }
 
 // El administrador cancela un viaje que aún no inicia: cancela sus boletos, devuelve los puntos y libera los asientos

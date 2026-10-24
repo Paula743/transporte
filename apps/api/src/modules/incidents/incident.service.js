@@ -28,6 +28,7 @@ export async function createIncident(user, { tripId, title, description, photo }
     emitterId: user.id,
     emitterRole: user.role,
     emitterName: user.name,
+    tripDriverId: trip.driverId, // operador del viaje en ese momento (el viaje puede reasignarse después)
     title,
     description,
     photo: photo ?? null,
@@ -35,9 +36,12 @@ export async function createIncident(user, { tripId, title, description, photo }
   })
 }
 
-// Incidencias de los viajes que salieron en el mes (sin la foto, que es pesada)
-export async function listIncidents(startStr) {
-  const { start, end } = monthPeriod(startStr)
+// Incidencias para el administrador, de la más reciente a la más antigua (sin la foto, que es pesada):
+//  - sin filtros: todas, de cualquier fecha
+//  - start: solo las de los viajes que salieron en ese mes
+//  - tripId: solo las de ese viaje
+export async function listIncidents({ start: startStr, tripId } = {}) {
+  const period = startStr ? monthPeriod(startStr) : null
   const [incidents, trips, routes] = await Promise.all([
     incidentsRepository.findAll(),
     tripsRepository.findAll(),
@@ -48,19 +52,21 @@ export async function listIncidents(startStr) {
 
   return incidents
     .filter((i) => {
+      if (tripId && i.tripId !== tripId) return false
+      if (!period) return true
       const trip = T[i.tripId]
       if (!trip) return false
       const dep = new Date(trip.departure)
-      return dep >= start && dep < end
+      return dep >= period.start && dep < period.end
     })
     .map(({ photo, ...i }) => {
       const trip = T[i.tripId]
-      const route = R[trip.routeId]
+      const route = trip ? R[trip.routeId] : null
       return {
         ...i,
         hasPhoto: !!photo,
-        route: route ? `${route.origin} → ${route.destination}` : 'Ruta eliminada',
-        departure: trip.departure,
+        route: route ? `${route.origin} → ${route.destination}` : trip ? 'Ruta eliminada' : 'Viaje eliminado',
+        departure: trip?.departure ?? null,
       }
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))

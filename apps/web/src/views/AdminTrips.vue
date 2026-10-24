@@ -17,6 +17,14 @@ const error = ref('')
 const msg = ref('')
 
 const modal = ref(null) // null = cerrado; {} = nuevo viaje; { id, ticketsSold } = editar
+
+// Reasignación de operador
+const reassigning = ref(null) // viaje
+const newDriverId = ref('')
+const newUnitId = ref('')
+const reassignReason = ref('')
+const reassignError = ref('')
+const reassignSaving = ref(false)
 const form = ref({ routeId: '', unitId: '', driverId: '', departure: '', arrival: '', platform: '' })
 const formError = ref('')
 const saving = ref(false)
@@ -36,6 +44,9 @@ async function load() {
 }
 onMounted(load)
 
+// Fecha y hora mínimas para elegir: ahora (no se pueden elegir fechas ni horas pasadas)
+const minDateTime = computed(() => toLocalInput(new Date(now.value).toISOString()))
+
 // Solo se ofrecen unidades disponibles para viajar y operadores activos
 const usableUnits = computed(() => units.value.filter((u) => !['EN_MANTENIMIENTO', 'FUERA_DE_SERVICIO'].includes(u.status)))
 const activeDrivers = computed(() => drivers.value.filter((d) => d.active))
@@ -54,8 +65,44 @@ const filtered = computed(() => {
   return [...list].sort((a, b) => new Date(b.departure) - new Date(a.departure))
 })
 
+// Las reasignaciones antiguas (solo de operador) no traen "type": se consideran de operador
+const wasReassigned = (t, type) => (t.reassignments ?? []).some((r) => (r.type ?? 'DRIVER') === type)
+
 // Solo se editan o cancelan viajes que aún no inician
 const canManage = (t) => t.status === 'PROXIMO' && !hasStarted(t, now.value)
+
+// Se reasigna operador y/o unidad solo en viajes programados que aún no inician (igual que editar o cancelar)
+const canReassign = (t) => canManage(t)
+const otherDrivers = computed(() => activeDrivers.value.filter((d) => d.id !== reassigning.value?.driverId))
+const otherUnits = computed(() => usableUnits.value.filter((u) => u.id !== reassigning.value?.unitId))
+
+function openReassign(t) {
+  reassigning.value = t
+  newDriverId.value = ''
+  newUnitId.value = ''
+  reassignReason.value = ''
+  reassignError.value = ''
+}
+
+async function saveReassign() {
+  reassignError.value = ''
+  reassignSaving.value = true
+  try {
+    await api.reassignTrip(reassigning.value.id, {
+      driverId: newDriverId.value,
+      unitId: newUnitId.value,
+      reason: reassignReason.value.trim(),
+    })
+    msg.value = 'Reasignación realizada.'
+    error.value = ''
+    reassigning.value = null
+    await load()
+  } catch (e) {
+    reassignError.value = e.message
+  } finally {
+    reassignSaving.value = false
+  }
+}
 
 function openNew() {
   form.value = { routeId: '', unitId: '', driverId: '', departure: '', arrival: '', platform: '' }
@@ -78,8 +125,10 @@ function openEdit(t) {
 
 async function save() {
   formError.value = ''
-  saving.value = true
   const f = form.value
+  if (new Date(f.departure) <= new Date()) return (formError.value = 'La salida debe ser posterior a la fecha y hora actuales')
+  if (new Date(f.arrival) <= new Date(f.departure)) return (formError.value = 'La llegada debe ser posterior a la salida')
+  saving.value = true
   const body = {
     routeId: f.routeId,
     unitId: f.unitId,
@@ -164,10 +213,14 @@ async function cancelTrip(t) {
             </td>
             <td class="whitespace-nowrap py-2 pr-3">{{ fmtDateTime(t.departure) }}</td>
             <td class="whitespace-nowrap py-2 pr-3">{{ fmtDateTime(t.arrival) }}</td>
-            <td class="py-2 pr-3">{{ t.unit?.plate ?? '—' }}</td>
+            <td class="py-2 pr-3">
+              {{ t.unit?.plate ?? '—' }}
+              <span v-if="wasReassigned(t, 'UNIT')" class="ml-1 text-xs text-amber-600" title="La unidad de este viaje fue reasignada">(reasignada)</span>
+            </td>
             <td class="py-2 pr-3">
               {{ t.driver?.name ?? '—' }}
               <span v-if="t.driver && !t.driver.active" class="ml-1 text-xs text-red-600">(de baja)</span>
+              <span v-if="wasReassigned(t, 'DRIVER')" class="ml-1 text-xs text-amber-600" title="El operador de este viaje fue reasignado">(reasignado)</span>
             </td>
             <td class="py-2 pr-3">{{ t.ticketsSold }}</td>
             <td class="whitespace-nowrap py-2 pr-3">{{ t.availableSeats ?? '—' }} / {{ t.totalSeats ?? '—' }}</td>
@@ -176,13 +229,33 @@ async function cancelTrip(t) {
                 {{ phaseLabel[tripPhase(t, now)] }}
               </span>
             </td>
-            <td class="whitespace-nowrap py-2 text-right">
-              <button class="btn-secondary btn-sm mr-1" :disabled="!canManage(t)" :title="canManage(t) ? '' : 'Solo se editan viajes que aún no inician'" @click="openEdit(t)">
-                Editar
-              </button>
-              <button class="btn-danger btn-sm" :disabled="!canManage(t)" :title="canManage(t) ? '' : 'Solo se cancelan viajes que aún no inician'" @click="cancelTrip(t)">
-                Cancelar viaje
-              </button>
+            <td class="py-2 text-right">
+              <div class="flex flex-wrap justify-end gap-1">
+                <!-- Solo aparece si el viaje tiene incidencias; lleva a la sección de incidencias filtrada por este viaje -->
+                <RouterLink
+                  v-if="t.incidentsCount > 0"
+                  :to="{ path: '/admin/incidents', query: { tripId: t.id } }"
+                  class="btn-secondary btn-sm"
+                >
+                  Ver incidencias ({{ t.incidentsCount }})
+                </RouterLink>
+                <button
+                  class="btn-secondary btn-sm"
+                  :disabled="!canReassign(t)"
+                  :title="canReassign(t) ? 'Asignar otro operador y/o otra unidad' : 'Solo se reasigna en viajes programados que aún no inician'"
+                  @click="openReassign(t)"
+                >
+                  Reasignar operador/unidad
+                </button>
+                <!--
+                <button class="btn-secondary btn-sm" :disabled="!canManage(t)" :title="canManage(t) ? '' : 'Solo se editan viajes que aún no inician'" @click="openEdit(t)">
+                  Editar
+                </button>
+                -->
+                <button class="btn-danger btn-sm" :disabled="!canManage(t)" :title="canManage(t) ? '' : 'Solo se cancelan viajes que aún no inician'" @click="cancelTrip(t)">
+                  Cancelar viaje
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -219,11 +292,11 @@ async function cancelTrip(t) {
           </div>
           <div>
             <label class="label">Salida</label>
-            <input v-model="form.departure" type="datetime-local" required class="input" />
+            <input v-model="form.departure" type="datetime-local" required :min="minDateTime" class="input" />
           </div>
           <div>
             <label class="label">Llegada</label>
-            <input v-model="form.arrival" type="datetime-local" required class="input" />
+            <input v-model="form.arrival" type="datetime-local" required :min="form.departure || minDateTime" class="input" />
           </div>
           <div>
             <label class="label">Andén (opcional)</label>
@@ -234,6 +307,46 @@ async function cancelTrip(t) {
         <div class="flex justify-end gap-2">
           <button type="button" class="btn-secondary" @click="modal = null">Cancelar</button>
           <button class="btn-primary" :disabled="saving">{{ saving ? 'Guardando...' : 'Guardar' }}</button>
+        </div>
+      </form>
+    </ModalForm>
+
+    <!-- Reasignar operador y/o unidad -->
+    <ModalForm v-if="reassigning" title="Reasignar operador/unidad" @close="reassigning = null">
+      <form class="space-y-3" @submit.prevent="saveReassign">
+        <p class="text-sm text-gray-600">
+          Viaje <b>{{ reassigning.route?.origin }} → {{ reassigning.route?.destination }}</b> del {{ fmtDateTime(reassigning.departure) }}.
+          <br />
+          Operador actual: <b>{{ reassigning.driver?.name ?? '—' }}</b> · Unidad actual: <b>{{ reassigning.unit?.plate ?? '—' }}</b>
+        </p>
+        <p class="text-xs text-gray-500">Elige solo lo que quieras cambiar; lo que dejes en "No cambiar" se queda igual.</p>
+        <div>
+          <label class="label">Nuevo operador</label>
+          <select v-model="newDriverId" class="input">
+            <option value="">No cambiar</option>
+            <option v-for="d in otherDrivers" :key="d.id" :value="d.id">{{ d.name }}</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Nueva unidad</label>
+          <select v-model="newUnitId" class="input">
+            <option value="">No cambiar</option>
+            <option v-for="u in otherUnits" :key="u.id" :value="u.id">{{ u.plate }} · {{ u.totalSeats }} asientos</option>
+          </select>
+          <p v-if="reassigning.ticketsSold" class="mt-1 text-xs text-amber-700">
+            El viaje tiene {{ reassigning.ticketsSold }} boleto(s) vendido(s): se conservan sus asientos, así que la nueva unidad debe tener lugar para ellos.
+          </p>
+        </div>
+        <div>
+          <label class="label">Motivo (opcional)</label>
+          <input v-model="reassignReason" maxlength="200" class="input" placeholder="Ej. La unidad tuvo una falla mecánica" />
+        </div>
+        <p v-if="reassignError" class="text-sm text-red-600">{{ reassignError }}</p>
+        <div class="flex justify-end gap-2">
+          <button type="button" class="btn-secondary" @click="reassigning = null">Cancelar</button>
+          <button class="btn-primary" :disabled="reassignSaving || (!newDriverId && !newUnitId)">
+            {{ reassignSaving ? 'Guardando...' : 'Reasignar' }}
+          </button>
         </div>
       </form>
     </ModalForm>

@@ -15,9 +15,11 @@ const routes = [
     meta: { role: 'ADMIN' },
     children: [
       { path: '', component: () => import('../views/AdminDashboard.vue') },
+      { path: 'passengers', component: () => import('../views/AdminPassengers.vue') },
       { path: 'drivers', component: () => import('../views/AdminDrivers.vue') },
       { path: 'routes', component: () => import('../views/AdminRoutes.vue') },
       { path: 'trips', component: () => import('../views/AdminTrips.vue') },
+      { path: 'incidents', component: () => import('../views/AdminIncidents.vue') },
       { path: 'units', component: () => import('../views/AdminUnits.vue') },
     ],
   },

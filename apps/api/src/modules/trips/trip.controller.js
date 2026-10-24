@@ -5,6 +5,7 @@ export const mine = async (req, res) => res.json(await service.driverTrips(req.u
 export const list = async (req, res) => res.json(await service.listTrips())
 export const create = async (req, res) => res.status(201).json(await service.createTrip(req.valid.body))
 export const update = async (req, res) => res.json(await service.updateTrip(req.params.id, req.valid.body))
+export const reassign = async (req, res) => res.json(await service.reassignTrip(req.params.id, req.valid.body))
 export const cancel = async (req, res) => {
   await service.cancelTrip(req.params.id)
   res.json({ ok: true })

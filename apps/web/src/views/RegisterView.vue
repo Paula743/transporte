@@ -1,12 +1,15 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { register } from '../stores/auth'
 
 const router = useRouter()
-const form = ref({ name: '', email: '', password: '' })
+const form = ref({ name: '', email: '', password: '', confirmPassword: '' })
 const error = ref('')
 const loading = ref(false)
+
+// Aviso en vivo mientras escribe la confirmación
+const mismatch = computed(() => form.value.confirmPassword !== '' && form.value.password !== form.value.confirmPassword)
 
 async function submit() {
   error.value = ''
@@ -14,9 +17,13 @@ async function submit() {
     error.value = 'La contraseña debe tener al menos 6 caracteres'
     return
   }
+  if (form.value.password !== form.value.confirmPassword) {
+    error.value = 'Las contraseñas no coinciden'
+    return
+  }
   loading.value = true
   try {
-    await register(form.value)
+    await register(form.value) // la API solo recibe nombre, correo y contraseña
     router.push('/login')
   } catch (e) {
     error.value = e.message
@@ -40,7 +47,19 @@ async function submit() {
       </div>
       <div>
         <label class="label">Contraseña</label>
-        <input v-model="form.password" type="password" required class="input" />
+        <input v-model="form.password" type="password" required autocomplete="new-password" class="input" />
+      </div>
+      <div>
+        <label class="label">Confirmar contraseña</label>
+        <input
+          v-model="form.confirmPassword"
+          type="password"
+          required
+          autocomplete="new-password"
+          class="input"
+          :class="mismatch ? 'border-red-400 focus:border-red-500' : ''"
+        />
+        <p v-if="mismatch" class="mt-1 text-xs text-red-600">Las contraseñas no coinciden</p>
       </div>
       <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
       <button class="btn-primary w-full" :disabled="loading">{{ loading ? 'Creando...' : 'Registrarme' }}</button>
